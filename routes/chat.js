@@ -1,0 +1,324 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const Message = require('../models/Message');
+const User = require('../models/User');
+const { getDatabase } = require('../config/firebase');
+
+const router = express.Router();
+
+// Middleware to verify JWT token and get user
+const authenticateUser = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    req.user = user;
+    next();
+
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Helper function to push message to Firebase Realtime Database
+const pushToFirebase = async (messageData) => {
+  try {
+    // Check if Firebase is configured
+    if (!process.env.FIREBASE_PROJECT_ID) {
+      console.log('⚠️  Firebase not configured - skipping real-time update');
+      return;
+    }
+
+    const database = getDatabase();
+    const { from, to, text, timestamp } = messageData;
+    
+    // Create chat path: chats/{fromId}_{toId} (sorted to ensure consistent path)
+    const fromId = from.id || from.toString();
+    const toId = to.id || to.toString();
+    const chatPath = [fromId, toId].sort().join('_');
+    const firebasePath = `chats/${chatPath}`;
+    
+    // Push message to Firebase with timestamp as key
+    const messageRef = database.ref(firebasePath).push();
+    await messageRef.set({
+      id: messageData.id,
+      from: messageData.from,
+      to: messageData.to,
+      text: messageData.text,
+      timestamp: timestamp,
+      formattedTimestamp: new Date(timestamp).toISOString()
+    });
+
+    console.log(`✅ Message pushed to Firebase: ${firebasePath}`);
+    
+  } catch (error) {
+    console.error('❌ Failed to push to Firebase:', error);
+    // Don't throw error to avoid breaking the main flow
+  }
+};
+
+// Send message endpoint
+router.post('/send', authenticateUser, async (req, res) => {
+  try {
+    const { to, text } = req.body;
+    const from = req.user._id;
+
+    // Validate input
+    if (!to || !text) {
+      return res.status(400).json({ error: 'Recipient and message text are required' });
+    }
+
+    if (text.trim().length === 0) {
+      return res.status(400).json({ error: 'Message text cannot be empty' });
+    }
+
+    if (text.length > 1000) {
+      return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
+    }
+
+    // Check if recipient exists
+    const recipient = await User.findById(to);
+    if (!recipient) {
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+
+    // Validation: If user (not admin), can send only to admin
+    if (!req.user.isAdmin) {
+      if (!recipient.isAdmin) {
+        return res.status(403).json({ 
+          error: 'Regular users can only send messages to administrators' 
+        });
+      }
+    }
+
+    // Validation: If admin, can send to any user
+    // (No additional validation needed for admin)
+
+    // Create and save message
+    const message = new Message({
+      from,
+      to,
+      text: text.trim()
+    });
+
+    await message.save();
+
+    // Populate sender and recipient info for response
+    await message.populate('from', 'username isAdmin');
+    await message.populate('to', 'username isAdmin');
+
+    // Prepare message data for Firebase
+    const messageData = {
+      id: message._id.toString(),
+      from: {
+        id: message.from._id.toString(),
+        username: message.from.username,
+        isAdmin: message.from.isAdmin
+      },
+      to: {
+        id: message.to._id.toString(),
+        username: message.to.username,
+        isAdmin: message.to.isAdmin
+      },
+      text: message.text,
+      timestamp: message.timestamp.getTime()
+    };
+
+    // Push to Firebase for real-time updates
+    await pushToFirebase(messageData);
+
+    res.status(201).json({
+      message: 'Message sent successfully',
+      data: message.getPublicData(),
+      realtime: {
+        firebasePath: `chats/${[from.toString(), to.toString()].sort().join('_')}`,
+        messageId: message._id.toString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Get conversation history between current user and another user
+router.get('/messages/:userId', authenticateUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.user._id;
+
+    // Validate that the target user exists
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Validation: If current user is not admin, can only view conversations with admins
+    if (!req.user.isAdmin) {
+      if (!targetUser.isAdmin) {
+        return res.status(403).json({ 
+          error: 'Regular users can only view conversations with administrators' 
+        });
+      }
+    }
+
+    // Get conversation history
+    const messages = await Message.findConversation(currentUserId, userId);
+
+    // Format messages for response
+    const formattedMessages = messages.map(msg => ({
+      id: msg._id,
+      from: {
+        id: msg.from._id,
+        username: msg.from.username,
+        isAdmin: msg.from.isAdmin
+      },
+      to: {
+        id: msg.to._id,
+        username: msg.to.username,
+        isAdmin: msg.to.isAdmin
+      },
+      text: msg.text,
+      timestamp: msg.timestamp,
+      formattedTimestamp: msg.formattedTimestamp
+    }));
+
+    res.json({
+      conversation: formattedMessages,
+      total: formattedMessages.length,
+      firebasePath: `chats/${[currentUserId.toString(), userId].sort().join('_')}`
+    });
+
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res.status(500).json({ error: 'Failed to retrieve messages' });
+  }
+});
+
+// Get all conversations for current user
+router.get('/conversations', authenticateUser, async (req, res) => {
+  try {
+    const currentUserId = req.user._id;
+
+    // Get all messages for the current user
+    const messages = await Message.findUserMessages(currentUserId);
+
+    // Group messages by conversation partner
+    const conversations = {};
+    
+    messages.forEach(msg => {
+      const partnerId = msg.from._id.toString() === currentUserId.toString() 
+        ? msg.to._id.toString() 
+        : msg.from._id.toString();
+      
+      if (!conversations[partnerId]) {
+        conversations[partnerId] = {
+          partner: msg.from._id.toString() === currentUserId.toString() 
+            ? { id: msg.to._id, username: msg.to.username, isAdmin: msg.to.isAdmin }
+            : { id: msg.from._id, username: msg.from.username, isAdmin: msg.from.isAdmin },
+          lastMessage: null,
+          messageCount: 0,
+          firebasePath: `chats/${[currentUserId.toString(), partnerId].sort().join('_')}`
+        };
+      }
+      
+      conversations[partnerId].messageCount++;
+      
+      // Update last message if this one is more recent
+      if (!conversations[partnerId].lastMessage || 
+          msg.timestamp > conversations[partnerId].lastMessage.timestamp) {
+        conversations[partnerId].lastMessage = {
+          text: msg.text,
+          timestamp: msg.timestamp,
+          formattedTimestamp: msg.formattedTimestamp
+        };
+      }
+    });
+
+    // Convert to array and sort by last message timestamp
+    const conversationsArray = Object.values(conversations).sort((a, b) => {
+      if (!a.lastMessage) return 1;
+      if (!b.lastMessage) return -1;
+      return new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp);
+    });
+
+    res.json({
+      conversations: conversationsArray,
+      total: conversationsArray.length
+    });
+
+  } catch (error) {
+    console.error('Get conversations error:', error);
+    res.status(500).json({ error: 'Failed to retrieve conversations' });
+  }
+});
+
+// Get messages sent by current user
+router.get('/sent', authenticateUser, async (req, res) => {
+  try {
+    const messages = await Message.findSentByUser(req.user._id);
+
+    const formattedMessages = messages.map(msg => ({
+      id: msg._id,
+      to: {
+        id: msg.to._id,
+        username: msg.to.username,
+        isAdmin: msg.to.isAdmin
+      },
+      text: msg.text,
+      timestamp: msg.timestamp,
+      formattedTimestamp: msg.formattedTimestamp
+    }));
+
+    res.json({
+      messages: formattedMessages,
+      total: formattedMessages.length
+    });
+
+  } catch (error) {
+    console.error('Get sent messages error:', error);
+    res.status(500).json({ error: 'Failed to retrieve sent messages' });
+  }
+});
+
+// Get messages received by current user
+router.get('/received', authenticateUser, async (req, res) => {
+  try {
+    const messages = await Message.findReceivedByUser(req.user._id);
+
+    const formattedMessages = messages.map(msg => ({
+      id: msg._id,
+      from: {
+        id: msg.from._id,
+        username: msg.from.username,
+        isAdmin: msg.from.isAdmin
+      },
+      text: msg.text,
+      timestamp: msg.timestamp,
+      formattedTimestamp: msg.formattedTimestamp
+    }));
+
+    res.json({
+      messages: formattedMessages,
+      total: formattedMessages.length
+    });
+
+  } catch (error) {
+    console.error('Get received messages error:', error);
+    res.status(500).json({ error: 'Failed to retrieve received messages' });
+  }
+});
+
+module.exports = router; 
