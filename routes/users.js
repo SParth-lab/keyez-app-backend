@@ -138,6 +138,55 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Get admin users (no authentication required)
+router.get('/admins/public', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search } = req.query;
+    
+    const query = { isAdmin: true };
+    
+    if (search) {
+      query.username = { $regex: search, $options: 'i' };
+    }
+
+    const adminUsers = await User.find(query)
+      .select('-password')
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .sort({ createdAt: -1 });
+
+    const total = await User.countDocuments(query);
+
+    res.json({
+      adminUsers,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      total,
+      message: 'Admin users retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Get admin users error:', error);
+    res.status(500).json({ error: 'Failed to fetch admin users' });
+  }
+});
+
+// Get admin users count (no authentication required)
+router.get('/admins/public/count', async (req, res) => {
+  try {
+    const adminCount = await User.countDocuments({ isAdmin: true });
+    
+    res.json({
+      adminCount,
+      message: 'Admin count retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Get admin count error:', error);
+    res.status(500).json({ error: 'Failed to fetch admin count' });
+  }
+});
+
 // Get user statistics (admin only)
 router.get('/stats/overview', requireAdmin, async (req, res) => {
   try {
