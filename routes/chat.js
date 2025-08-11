@@ -1,6 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
+const GroupMessage = require('../models/GroupMessage');
+const Group = require('../models/Group');
 const User = require('../models/User');
 const { getDatabase } = require('../config/firebase');
 
@@ -31,7 +33,7 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
-// Helper function to push message to Firebase Realtime Database
+// Helper function to push 1:1 message to Firebase Realtime Database
 const pushToFirebase = async (messageData) => {
   try {
     // Check if Firebase is configured
@@ -65,6 +67,27 @@ const pushToFirebase = async (messageData) => {
   } catch (error) {
     console.error('❌ Failed to push to Firebase:', error);
     // Don't throw error to avoid breaking the main flow
+  }
+};
+
+// Helper function to push group message to Firebase Realtime Database
+const pushGroupToFirebase = async (groupMessageData) => {
+  try {
+    if (!process.env.FIREBASE_PROJECT_ID) {
+      console.log('⚠️  Firebase not configured - skipping group real-time update');
+      return;
+    }
+
+    const database = getDatabase();
+    const { groupId } = groupMessageData;
+    const firebasePath = `group_chats/${groupId}`;
+
+    const messageRef = database.ref(firebasePath).push();
+    await messageRef.set(groupMessageData);
+
+    console.log(`✅ Group message pushed to Firebase: ${firebasePath}`);
+  } catch (error) {
+    console.error('❌ Failed to push group message to Firebase:', error);
   }
 };
 
@@ -153,6 +176,103 @@ router.post('/send', authenticateUser, async (req, res) => {
   }
 });
 
+// Send group message (admin only)
+router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { groupId } = req.params;
+    const { text } = req.body;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Message text cannot be empty' });
+    }
+    if (text.length > 1000) {
+      return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
+    }
+
+    const group = await Group.findById(groupId).populate('members', 'username isAdmin');
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    if (!group.isActive) {
+      return res.status(400).json({ error: 'Group is inactive' });
+    }
+
+    // Create and save message
+    const message = new GroupMessage({
+      group: groupId,
+      from: req.user._id,
+      text: text.trim(),
+    });
+    await message.save();
+    await message.populate('from', 'username isAdmin');
+
+    const data = {
+      id: message._id.toString(),
+      groupId: groupId,
+      from: {
+        id: message.from._id.toString(),
+        username: message.from.username,
+        isAdmin: message.from.isAdmin,
+      },
+      text: message.text,
+      timestamp: message.timestamp.getTime(),
+    };
+
+    await pushGroupToFirebase(data);
+
+    res.status(201).json({
+      message: 'Group message sent successfully',
+      data,
+      realtime: {
+        firebasePath: `group_chats/${groupId}`,
+      },
+    });
+  } catch (error) {
+    console.error('Send group message error:', error);
+    res.status(500).json({ error: 'Failed to send group message' });
+  }
+});
+
+// Get group messages (admin only)
+router.get('/groups/:groupId/messages', authenticateUser, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { groupId } = req.params;
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const messages = await GroupMessage.findByGroup(groupId);
+    const formatted = messages.map((msg) => ({
+      id: msg._id,
+      from: {
+        id: msg.from._id,
+        username: msg.from.username,
+        isAdmin: msg.from.isAdmin,
+      },
+      text: msg.text,
+      timestamp: msg.timestamp,
+      formattedTimestamp: msg.formattedTimestamp,
+    }));
+
+    res.json({
+      messages: formatted,
+      total: formatted.length,
+      firebasePath: `group_chats/${groupId}`,
+    });
+  } catch (error) {
+    console.error('Get group messages error:', error);
+    res.status(500).json({ error: 'Failed to retrieve group messages' });
+  }
+});
 // Get conversation history between current user and another user
 router.get('/messages/:userId', authenticateUser, async (req, res) => {
   try {
