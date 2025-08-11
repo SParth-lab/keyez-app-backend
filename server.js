@@ -14,6 +14,7 @@ const seedAdmin = require('./scripts/seedAdmin');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const chatRoutes = require('./routes/chat');
+const groupRoutes = require('./routes/groups');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/groups', groupRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -48,7 +50,8 @@ app.get('/', (req, res) => {
       health: '/health',
       auth: '/api/auth',
       users: '/api/users',
-      chat: '/api/chat'
+        chat: '/api/chat',
+        groups: '/api/groups'
     }
   });
 });
