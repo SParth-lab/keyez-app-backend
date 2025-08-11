@@ -179,10 +179,6 @@ router.post('/send', authenticateUser, async (req, res) => {
 // Send group message (admin only)
 router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
   try {
-    if (!req.user.isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
     const { groupId } = req.params;
     const { text } = req.body;
 
@@ -199,6 +195,12 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
     }
     if (!group.isActive) {
       return res.status(400).json({ error: 'Group is inactive' });
+    }
+
+    // Only group members can send messages
+    const isMember = group.members.some((m) => m._id.toString() === req.user._id.toString());
+    if (!isMember) {
+      return res.status(403).json({ error: 'You must be a member of this group to send messages' });
     }
 
     // Create and save message
@@ -240,14 +242,16 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
 // Get group messages (admin only)
 router.get('/groups/:groupId/messages', authenticateUser, async (req, res) => {
   try {
-    if (!req.user.isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
     const { groupId } = req.params;
-    const group = await Group.findById(groupId);
+    const group = await Group.findById(groupId).populate('members', '_id');
     if (!group) {
       return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Only group members can view messages
+    const isMember = group.members.some((m) => m._id.toString() === req.user._id.toString());
+    if (!isMember) {
+      return res.status(403).json({ error: 'You must be a member of this group to view messages' });
     }
 
     const messages = await GroupMessage.findByGroup(groupId);

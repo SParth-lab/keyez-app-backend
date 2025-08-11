@@ -193,6 +193,50 @@ router.get('/:groupId', requireAdmin, async (req, res) => {
   }
 });
 
+// Get current user's groups (member access)
+router.get('/me/list', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token provided' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const groups = await Group.find({ members: user._id, isActive: true })
+      .populate('members', 'username isAdmin')
+      .populate('createdBy', 'username isAdmin')
+      .sort({ createdAt: -1 });
+
+    res.json({ groups: groups.map((g) => g.getPublicData()), total: groups.length });
+  } catch (error) {
+    console.error('Get my groups error:', error);
+    res.status(500).json({ error: 'Failed to fetch groups' });
+  }
+});
+
+// Get a specific group by name if current user is a member
+router.get('/me/by-name/:name', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token provided' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const { name } = req.params;
+    const group = await Group.findOne({ name, members: user._id, isActive: true })
+      .populate('members', 'username isAdmin')
+      .populate('createdBy', 'username isAdmin');
+    if (!group) return res.status(404).json({ error: 'Group not found or access denied' });
+    res.json({ group: group.getPublicData() });
+  } catch (error) {
+    console.error('Get my group by name error:', error);
+    res.status(500).json({ error: 'Failed to fetch group' });
+  }
+});
+
 module.exports = router;
 
 
