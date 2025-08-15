@@ -15,6 +15,22 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters']
   },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    unique: true,
+    sparse: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address']
+  },
+  phoneNumber: {
+    type: String,
+    trim: true
+  },
+  avatar: {
+    type: String,
+    trim: true
+  },
   isAdmin: {
     type: Boolean,
     default: false
@@ -56,7 +72,10 @@ userSchema.methods.getPublicProfile = function() {
   return {
     username: this.username,
     isAdmin: this.isAdmin,
-    id: this._id
+    id: this._id,
+    email: this.email || null,
+    phoneNumber: this.phoneNumber || null,
+    avatar: this.avatar || null
   };
 };
 

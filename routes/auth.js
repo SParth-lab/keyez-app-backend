@@ -16,7 +16,7 @@ const generateToken = (userId) => {
 // Register new user (normal users only)
 router.post('/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, email, phoneNumber, avatar } = req.body;
 
     // Validate input
     if (!username || !password) {
@@ -41,7 +41,10 @@ router.post('/register', async (req, res) => {
     const user = new User({
       username,
       password,
-      isAdmin: false // Ensure only normal users can register
+      isAdmin: false, // Ensure only normal users can register
+      email,
+      phoneNumber,
+      avatar
     });
 
     await user.save();

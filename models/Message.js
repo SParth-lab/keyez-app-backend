@@ -54,7 +54,7 @@ messageSchema.statics.findConversation = function(user1Id, user2Id) {
       { from: user1Id, to: user2Id },
       { from: user2Id, to: user1Id }
     ]
-  }).sort({ timestamp: 1 }).populate('from', 'username isAdmin').populate('to', 'username isAdmin');
+  }).sort({ timestamp: 1 }).populate('from', 'username isAdmin avatar').populate('to', 'username isAdmin avatar');
 };
 
 // Static method to find messages for a specific user
@@ -64,21 +64,21 @@ messageSchema.statics.findUserMessages = function(userId) {
       { from: userId },
       { to: userId }
     ]
-  }).sort({ timestamp: -1 }).populate('from', 'username isAdmin').populate('to', 'username isAdmin');
+  }).sort({ timestamp: -1 }).populate('from', 'username isAdmin avatar').populate('to', 'username isAdmin avatar');
 };
 
 // Static method to find messages sent by a user
 messageSchema.statics.findSentByUser = function(userId) {
   return this.find({ from: userId })
     .sort({ timestamp: -1 })
-    .populate('to', 'username isAdmin');
+    .populate('to', 'username isAdmin avatar');
 };
 
 // Static method to find messages received by a user
 messageSchema.statics.findReceivedByUser = function(userId) {
   return this.find({ to: userId })
     .sort({ timestamp: -1 })
-    .populate('from', 'username isAdmin');
+    .populate('from', 'username isAdmin avatar');
 };
 
 module.exports = mongoose.model('Message', messageSchema); 

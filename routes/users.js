@@ -86,7 +86,7 @@ router.get('/:id', requireAdmin, async (req, res) => {
 // Update user (admin only)
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
-    const { username, isAdmin } = req.body;
+    const { username, isAdmin, email, phoneNumber, avatar } = req.body;
     
     const user = await User.findById(req.params.id);
     
@@ -97,6 +97,9 @@ router.put('/:id', requireAdmin, async (req, res) => {
     // Update allowed fields
     if (username) user.username = username;
     if (typeof isAdmin === 'boolean') user.isAdmin = isAdmin;
+    if (email !== undefined) user.email = email;
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+    if (avatar !== undefined) user.avatar = avatar;
 
     await user.save();
 

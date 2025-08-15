@@ -138,8 +138,8 @@ router.post('/send', authenticateUser, async (req, res) => {
     await message.save();
 
     // Populate sender and recipient info for response
-    await message.populate('from', 'username isAdmin');
-    await message.populate('to', 'username isAdmin');
+    await message.populate('from', 'username isAdmin avatar');
+    await message.populate('to', 'username isAdmin avatar');
 
     // Prepare message data for Firebase
     const messageData = {
@@ -147,12 +147,14 @@ router.post('/send', authenticateUser, async (req, res) => {
       from: {
         id: message.from._id.toString(),
         username: message.from.username,
-        isAdmin: message.from.isAdmin
+        isAdmin: message.from.isAdmin,
+        avatar: message.from.avatar || null
       },
       to: {
         id: message.to._id.toString(),
         username: message.to.username,
-        isAdmin: message.to.isAdmin
+        isAdmin: message.to.isAdmin,
+        avatar: message.to.avatar || null
       },
       text: message.text,
       timestamp: message.timestamp.getTime()
@@ -210,7 +212,7 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
       text: text.trim(),
     });
     await message.save();
-    await message.populate('from', 'username isAdmin');
+    await message.populate('from', 'username isAdmin avatar');
 
     const data = {
       id: message._id.toString(),
@@ -219,6 +221,7 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
         id: message.from._id.toString(),
         username: message.from.username,
         isAdmin: message.from.isAdmin,
+        avatar: message.from.avatar || null,
       },
       text: message.text,
       timestamp: message.timestamp.getTime(),
@@ -261,6 +264,7 @@ router.get('/groups/:groupId/messages', authenticateUser, async (req, res) => {
         id: msg.from._id,
         username: msg.from.username,
         isAdmin: msg.from.isAdmin,
+        avatar: msg.from.avatar || null,
       },
       text: msg.text,
       timestamp: msg.timestamp,
@@ -307,12 +311,14 @@ router.get('/messages/:userId', authenticateUser, async (req, res) => {
       from: {
         id: msg.from._id,
         username: msg.from.username,
-        isAdmin: msg.from.isAdmin
+        isAdmin: msg.from.isAdmin,
+        avatar: msg.from.avatar || null
       },
       to: {
         id: msg.to._id,
         username: msg.to.username,
-        isAdmin: msg.to.isAdmin
+        isAdmin: msg.to.isAdmin,
+        avatar: msg.to.avatar || null
       },
       text: msg.text,
       timestamp: msg.timestamp,
@@ -399,7 +405,8 @@ router.get('/sent', authenticateUser, async (req, res) => {
       to: {
         id: msg.to._id,
         username: msg.to.username,
-        isAdmin: msg.to.isAdmin
+        isAdmin: msg.to.isAdmin,
+        avatar: msg.to.avatar || null
       },
       text: msg.text,
       timestamp: msg.timestamp,
@@ -427,7 +434,8 @@ router.get('/received', authenticateUser, async (req, res) => {
       from: {
         id: msg.from._id,
         username: msg.from.username,
-        isAdmin: msg.from.isAdmin
+        isAdmin: msg.from.isAdmin,
+        avatar: msg.from.avatar || null
       },
       text: msg.text,
       timestamp: msg.timestamp,

@@ -49,7 +49,7 @@ groupMessageSchema.methods.getPublicData = function () {
 groupMessageSchema.statics.findByGroup = function (groupId) {
   return this.find({ group: groupId })
     .sort({ timestamp: 1 })
-    .populate('from', 'username isAdmin');
+    .populate('from', 'username isAdmin avatar');
 };
 
 module.exports = mongoose.model('GroupMessage', groupMessageSchema);
