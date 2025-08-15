@@ -201,7 +201,9 @@ router.get('/me/list', async (req, res) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user){
+      return res.status(401).json({ error: 'Groups: User not found' });
+    } 
 
     const groups = await Group.find({ members: user._id, isActive: true })
       .populate('members', 'username isAdmin')
