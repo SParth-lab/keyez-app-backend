@@ -171,4 +171,63 @@ router.put('/change-password', async (req, res) => {
   }
 });
 
+// Update current user profile
+router.put('/profile', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { username, email, phoneNumber, avatar } = req.body;
+
+    // Basic validations
+    if (username !== undefined && typeof username === 'string') {
+      if (username.trim().length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters' });
+      }
+      user.username = username.trim();
+    }
+
+    if (email !== undefined) {
+      if (email && !/^\S+@\S+\.\S+$/.test(email)) {
+        return res.status(400).json({ error: 'Please provide a valid email address' });
+      }
+      user.email = email ? email.trim().toLowerCase() : undefined;
+    }
+
+    if (phoneNumber !== undefined) {
+      user.phoneNumber = phoneNumber;
+    }
+
+    if (avatar !== undefined) {
+      user.avatar = avatar;
+    }
+
+    await user.save();
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: user.getPublicProfile()
+    });
+
+  } catch (error) {
+    // Handle duplicate key errors (e.g., username/email uniqueness)
+    if (error && error.code === 11000) {
+      const field = Object.keys(error.keyValue || {})[0] || 'field';
+      return res.status(400).json({ error: `${field} already exists` });
+    }
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Profile update failed' });
+  }
+});
+
 module.exports = router; 
