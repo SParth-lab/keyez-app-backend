@@ -191,7 +191,7 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
     }
 
-    const group = await Group.findById(groupId).populate('members', 'username isAdmin');
+    const group = await Group.findById(groupId).populate('members', 'username isAdmin avatar');
     if (!group) {
       return res.status(404).json({ error: 'Group not found' });
     }

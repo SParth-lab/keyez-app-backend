@@ -64,8 +64,8 @@ router.post('/', requireAdmin, async (req, res) => {
     await group.save();
 
     const populated = await Group.findById(group._id)
-      .populate('members', 'username isAdmin')
-      .populate('createdBy', 'username isAdmin');
+      .populate('members', 'username isAdmin avatar')
+      .populate('createdBy', 'username isAdmin avatar');
 
     res.status(201).json({
       message: 'Group created successfully',
@@ -118,8 +118,8 @@ router.put('/:groupId', requireAdmin, async (req, res) => {
     await group.save();
 
     const populated = await Group.findById(group._id)
-      .populate('members', 'username isAdmin')
-      .populate('createdBy', 'username isAdmin');
+      .populate('members', 'username isAdmin avatar')
+      .populate('createdBy', 'username isAdmin avatar');
 
     res.json({
       message: 'Group updated successfully',
@@ -158,8 +158,8 @@ router.get('/', requireAdmin, async (req, res) => {
       query.name = { $regex: search, $options: 'i' };
     }
     const groups = await Group.find(query)
-      .populate('members', 'username isAdmin')
-      .populate('createdBy', 'username isAdmin')
+      .populate('members', 'username isAdmin avatar')
+      .populate('createdBy', 'username isAdmin avatar')
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
@@ -181,8 +181,8 @@ router.get('/:groupId', requireAdmin, async (req, res) => {
   try {
     const { groupId } = req.params;
     const group = await Group.findById(groupId)
-      .populate('members', 'username isAdmin')
-      .populate('createdBy', 'username isAdmin');
+      .populate('members', 'username isAdmin avatar')
+      .populate('createdBy', 'username isAdmin avatar');
     if (!group) {
       return res.status(404).json({ error: 'Group not found' });
     }
@@ -206,8 +206,8 @@ router.get('/me/list', async (req, res) => {
     } 
 
     const groups = await Group.find({ members: user._id, isActive: true })
-      .populate('members', 'username isAdmin')
-      .populate('createdBy', 'username isAdmin')
+      .populate('members', 'username isAdmin avatar')
+      .populate('createdBy', 'username isAdmin avatar')
       .sort({ createdAt: -1 });
 
     res.json({ groups: groups.map((g) => g.getPublicData()), total: groups.length });
@@ -229,8 +229,8 @@ router.get('/me/by-name/:name', async (req, res) => {
 
     const { name } = req.params;
     const group = await Group.findOne({ name, members: user._id, isActive: true })
-      .populate('members', 'username isAdmin')
-      .populate('createdBy', 'username isAdmin');
+      .populate('members', 'username isAdmin avatar')
+      .populate('createdBy', 'username isAdmin avatar');
     if (!group) return res.status(404).json({ error: 'Group not found or access denied' });
     res.json({ group: group.getPublicData() });
   } catch (error) {
