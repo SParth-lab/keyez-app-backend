@@ -34,6 +34,60 @@ const userSchema = new mongoose.Schema({
   isAdmin: {
     type: Boolean,
     default: false
+  },
+  // FCM tokens for push notifications (array to support multiple devices)
+  fcmTokens: [{
+    token: {
+      type: String,
+      required: true
+    },
+    deviceType: {
+      type: String,
+      enum: ['android', 'ios', 'web'],
+      default: 'android'
+    },
+    deviceId: {
+      type: String,
+      required: false
+    },
+    lastUsed: {
+      type: Date,
+      default: Date.now
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  }],
+  // Notification preferences
+  notificationSettings: {
+    pushEnabled: {
+      type: Boolean,
+      default: function() {
+        // Admins don't get push notifications (they use web interface)
+        return !this.isAdmin;
+      }
+    },
+    messageNotifications: {
+      type: Boolean,
+      default: true
+    },
+    systemNotifications: {
+      type: Boolean,
+      default: true
+    },
+    announcementNotifications: {
+      type: Boolean,
+      default: true
+    }
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
+  isOnline: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true,
@@ -82,6 +136,65 @@ userSchema.methods.getPublicProfile = function() {
 // Static method to find by username
 userSchema.statics.findByUsername = function(username) {
   return this.findOne({ username: username.toLowerCase() });
+};
+
+// Instance method to add FCM token
+userSchema.methods.addFcmToken = function(token, deviceType = 'android', deviceId = null) {
+  // Remove existing token if it exists
+  this.fcmTokens = this.fcmTokens.filter(t => t.token !== token);
+  
+  // Add new token
+  this.fcmTokens.push({
+    token,
+    deviceType,
+    deviceId,
+    lastUsed: new Date(),
+    isActive: true
+  });
+  
+  return this.save();
+};
+
+// Instance method to remove FCM token
+userSchema.methods.removeFcmToken = function(token) {
+  this.fcmTokens = this.fcmTokens.filter(t => t.token !== token);
+  return this.save();
+};
+
+// Instance method to get active FCM tokens
+userSchema.methods.getActiveFcmTokens = function() {
+  return this.fcmTokens
+    .filter(t => t.isActive)
+    .map(t => t.token);
+};
+
+// Instance method to update last seen
+userSchema.methods.updateLastSeen = function() {
+  this.lastSeen = new Date();
+  return this.save();
+};
+
+// Instance method to set online status
+userSchema.methods.setOnlineStatus = function(isOnline) {
+  this.isOnline = isOnline;
+  if (isOnline) {
+    this.lastSeen = new Date();
+  }
+  return this.save();
+};
+
+// Instance method to update notification settings
+userSchema.methods.updateNotificationSettings = function(settings) {
+  this.notificationSettings = { ...this.notificationSettings, ...settings };
+  return this.save();
+};
+
+// Static method to find users with FCM tokens (for broadcast notifications)
+userSchema.statics.findUsersWithTokens = function() {
+  return this.find({ 
+    'fcmTokens.0': { $exists: true },
+    'fcmTokens.isActive': true 
+  });
 };
 
 module.exports = mongoose.model('User', userSchema); 

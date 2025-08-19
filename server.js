@@ -15,6 +15,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const chatRoutes = require('./routes/chat');
 const groupRoutes = require('./routes/groups');
+const firebaseNotificationRoutes = require('./routes/firebaseNotifications');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/notifications', firebaseNotificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -50,8 +52,9 @@ app.get('/', (req, res) => {
       health: '/health',
       auth: '/api/auth',
       users: '/api/users',
-        chat: '/api/chat',
-        groups: '/api/groups'
+      chat: '/api/chat',
+      groups: '/api/groups',
+      notifications: '/api/notifications'
     }
   });
 });

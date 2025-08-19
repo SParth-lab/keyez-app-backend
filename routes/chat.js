@@ -5,6 +5,7 @@ const GroupMessage = require('../models/GroupMessage');
 const Group = require('../models/Group');
 const User = require('../models/User');
 const { getDatabase } = require('../config/firebase');
+const FirebaseNotificationService = require('../services/firebaseNotificationService');
 
 const router = express.Router();
 
@@ -163,12 +164,27 @@ router.post('/send', authenticateUser, async (req, res) => {
     // Push to Firebase for real-time updates
     await pushToFirebase(messageData);
 
+    // Send notification to recipient using Firebase-only service
+    const notificationResult = await FirebaseNotificationService.sendMessageNotification(
+      message, 
+      req.user, 
+      recipient
+    );
+
     res.status(201).json({
       message: 'Message sent successfully',
       data: message.getPublicData(),
       realtime: {
         firebasePath: `chats/${[from.toString(), to.toString()].sort().join('_')}`,
         messageId: message._id.toString()
+      },
+      notification: notificationResult.success ? {
+        sent: true,
+        notificationId: notificationResult.notification?.id,
+        pushSent: notificationResult.pushResult?.success || false
+      } : {
+        sent: false,
+        reason: notificationResult.reason || notificationResult.error
       }
     });
 
@@ -229,12 +245,28 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
 
     await pushGroupToFirebase(data);
 
+    // Send notifications to all group members except sender
+    const notificationResult = await FirebaseNotificationService.sendGroupMessageNotification(
+      message,
+      req.user,
+      group
+    );
+
     res.status(201).json({
       message: 'Group message sent successfully',
       data,
       realtime: {
         firebasePath: `group_chats/${groupId}`,
       },
+      notifications: notificationResult.success ? {
+        sent: true,
+        totalNotifications: notificationResult.totalNotifications,
+        successfulNotifications: notificationResult.successfulNotifications,
+        details: notificationResult.results
+      } : {
+        sent: false,
+        error: notificationResult.error
+      }
     });
   } catch (error) {
     console.error('Send group message error:', error);

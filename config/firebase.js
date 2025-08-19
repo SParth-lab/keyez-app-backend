@@ -81,10 +81,147 @@ const getAuth = () => {
   return firebaseApp.auth();
 };
 
+// Get Firebase Messaging instance
+const getMessaging = () => {
+  if (!firebaseApp) {
+    console.warn('Firebase not initialized, messaging unavailable');
+    return null;
+  }
+  return admin.messaging();
+};
+
+// Send push notification using FCM
+const sendPushNotification = async (tokens, notification, data = {}) => {
+  try {
+    const messaging = getMessaging();
+    if (!messaging) {
+      throw new Error('Firebase messaging not available');
+    }
+
+    // Ensure tokens is an array
+    const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
+    
+    if (tokenArray.length === 0) {
+      throw new Error('No FCM tokens provided');
+    }
+
+    const message = {
+      notification: {
+        title: notification.title,
+        body: notification.body
+      },
+      data: {
+        ...data,
+        notificationId: data.notificationId || '',
+        type: data.type || 'system',
+        priority: data.priority || 'normal'
+      },
+      tokens: tokenArray
+    };
+
+    const response = await messaging.sendMulticast(message);
+    
+    console.log(`✅ Push notification sent successfully:`, {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      totalTokens: tokenArray.length
+    });
+
+    return {
+      success: true,
+      response,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      results: response.responses
+    };
+
+  } catch (error) {
+    console.error('❌ Failed to send push notification:', error);
+    return {
+      success: false,
+      error: error.message,
+      successCount: 0,
+      failureCount: Array.isArray(tokens) ? tokens.length : 1
+    };
+  }
+};
+
+// Send notification to a single token
+const sendNotificationToToken = async (token, notification, data = {}) => {
+  try {
+    const messaging = getMessaging();
+    if (!messaging) {
+      throw new Error('Firebase messaging not available');
+    }
+
+    const message = {
+      notification: {
+        title: notification.title,
+        body: notification.body
+      },
+      data: {
+        ...data,
+        notificationId: data.notificationId || '',
+        type: data.type || 'system',
+        priority: data.priority || 'normal'
+      },
+      token: token
+    };
+
+    const response = await messaging.send(message);
+    
+    console.log(`✅ Push notification sent to token: ${token.substring(0, 20)}...`);
+    return {
+      success: true,
+      messageId: response,
+      token
+    };
+
+  } catch (error) {
+    console.error(`❌ Failed to send notification to token ${token.substring(0, 20)}...:`, error);
+    return {
+      success: false,
+      error: error.message,
+      token
+    };
+  }
+};
+
+// Verify FCM token validity
+const verifyFcmToken = async (token) => {
+  try {
+    const messaging = getMessaging();
+    if (!messaging) {
+      return { valid: false, error: 'Firebase messaging not available' };
+    }
+
+    // Try to send a dry-run message to verify token
+    const message = {
+      notification: {
+        title: 'Token Verification',
+        body: 'This is a test notification'
+      },
+      token: token,
+      dryRun: true
+    };
+
+    await messaging.send(message);
+    return { valid: true };
+
+  } catch (error) {
+    console.warn(`Invalid FCM token: ${token.substring(0, 20)}...`, error.message);
+    return { valid: false, error: error.message };
+  }
+};
+
 module.exports = {
   initializeFirebase,
   getFirebaseAdmin,
   getFirestore,
   getDatabase,
-  getAuth
+  getAuth,
+  getMessaging,
+  sendPushNotification,
+  sendNotificationToToken,
+  verifyFcmToken
 }; 
