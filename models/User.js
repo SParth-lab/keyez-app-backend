@@ -2,18 +2,25 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
+  // For regular users: phone number is primary identifier
+  // For admins: username is primary identifier
   username: {
     type: String,
-    required: [true, 'Username is required'],
-    unique: true,
     trim: true,
     minlength: [3, 'Username must be at least 3 characters'],
-    maxlength: [30, 'Username cannot be more than 30 characters']
+    maxlength: [30, 'Username cannot be more than 30 characters'],
+    required: function() {
+      return this.isAdmin; // Only required for admin users
+    },
+    unique: true,
+    sparse: true // Allows multiple null values for non-admin users
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters']
+    minlength: [6, 'Password must be at least 6 characters'],
+    required: function() {
+      return this.isAdmin; // Only required for admin users
+    }
   },
   email: {
     type: String,
@@ -25,7 +32,22 @@ const userSchema = new mongoose.Schema({
   },
   phoneNumber: {
     type: String,
-    trim: true
+    trim: true,
+    required: function() {
+      return !this.isAdmin; // Required for regular users only
+    },
+    unique: true,
+    sparse: true,
+    match: [/^\+[1-9]\d{1,14}$/, 'Please provide a valid phone number with country code']
+  },
+  // Firebase UID for phone authentication
+  firebaseUid: {
+    type: String,
+    unique: true,
+    sparse: true,
+    required: function() {
+      return !this.isAdmin; // Required for regular users only
+    }
   },
   avatar: {
     type: String,
@@ -35,7 +57,35 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // FCM tokens for push notifications (array to support multiple devices)
+  // Single device session management for regular users
+  activeSession: {
+    deviceFingerprint: {
+      type: String,
+      required: function() {
+        return !this.isAdmin; // Only required for regular users
+      }
+    },
+    sessionToken: {
+      type: String,
+      unique: true,
+      sparse: true
+    },
+    loginTime: {
+      type: Date,
+      default: Date.now
+    },
+    deviceInfo: {
+      platform: String,
+      version: String,
+      model: String,
+      appVersion: String
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  },
+  // FCM tokens for push notifications (single device for users, multiple for admins)
   fcmTokens: [{
     token: {
       type: String,
@@ -59,6 +109,38 @@ const userSchema = new mongoose.Schema({
       default: true
     }
   }],
+  // Security settings and violations tracking
+  securityProfile: {
+    screenshotAttempts: {
+      type: Number,
+      default: 0
+    },
+    copyAttempts: {
+      type: Number,
+      default: 0
+    },
+    securityViolations: [{
+      type: {
+        type: String,
+        enum: ['screenshot_attempt', 'copy_attempt', 'unauthorized_access', 'multiple_login_attempt']
+      },
+      timestamp: {
+        type: Date,
+        default: Date.now
+      },
+      deviceInfo: mongoose.Schema.Types.Mixed,
+      notifiedAdmin: {
+        type: Boolean,
+        default: false
+      }
+    }],
+    isBlocked: {
+      type: Boolean,
+      default: false
+    },
+    blockReason: String,
+    blockedAt: Date
+  },
   // Notification preferences
   notificationSettings: {
     pushEnabled: {
@@ -138,19 +220,129 @@ userSchema.statics.findByUsername = function(username) {
   return this.findOne({ username: username.toLowerCase() });
 };
 
-// Instance method to add FCM token
-userSchema.methods.addFcmToken = function(token, deviceType = 'android', deviceId = null) {
-  // Remove existing token if it exists
-  this.fcmTokens = this.fcmTokens.filter(t => t.token !== token);
+// Static method to find by phone number
+userSchema.statics.findByPhoneNumber = function(phoneNumber) {
+  return this.findOne({ phoneNumber: phoneNumber });
+};
+
+// Static method to find by Firebase UID
+userSchema.statics.findByFirebaseUid = function(firebaseUid) {
+  return this.findOne({ firebaseUid: firebaseUid });
+};
+
+// Instance method to create new device session (single device for users)
+userSchema.methods.createDeviceSession = function(deviceFingerprint, deviceInfo, sessionToken) {
+  if (!this.isAdmin) {
+    // For regular users: single device only
+    this.activeSession = {
+      deviceFingerprint,
+      sessionToken,
+      loginTime: new Date(),
+      deviceInfo,
+      isActive: true
+    };
+  }
+  return this.save();
+};
+
+// Instance method to validate device session
+userSchema.methods.validateDeviceSession = function(deviceFingerprint, sessionToken) {
+  if (this.isAdmin) {
+    return true; // Admins can have multiple sessions
+  }
   
-  // Add new token
-  this.fcmTokens.push({
-    token,
-    deviceType,
-    deviceId,
-    lastUsed: new Date(),
-    isActive: true
+  return this.activeSession &&
+         this.activeSession.isActive &&
+         this.activeSession.deviceFingerprint === deviceFingerprint &&
+         this.activeSession.sessionToken === sessionToken;
+};
+
+// Instance method to revoke device session
+userSchema.methods.revokeDeviceSession = function() {
+  if (this.activeSession) {
+    this.activeSession.isActive = false;
+  }
+  return this.save();
+};
+
+// Instance method to record security violation
+userSchema.methods.recordSecurityViolation = function(type, deviceInfo = {}) {
+  if (!this.securityProfile) {
+    this.securityProfile = {
+      screenshotAttempts: 0,
+      copyAttempts: 0,
+      securityViolations: [],
+      isBlocked: false
+    };
+  }
+  
+  // Increment specific counter
+  if (type === 'screenshot_attempt') {
+    this.securityProfile.screenshotAttempts += 1;
+  } else if (type === 'copy_attempt') {
+    this.securityProfile.copyAttempts += 1;
+  }
+  
+  // Add to violations log
+  this.securityProfile.securityViolations.push({
+    type,
+    timestamp: new Date(),
+    deviceInfo,
+    notifiedAdmin: false
   });
+  
+  // Auto-block after 3 violations
+  if (this.securityProfile.securityViolations.length >= 3) {
+    this.securityProfile.isBlocked = true;
+    this.securityProfile.blockReason = 'Multiple security violations';
+    this.securityProfile.blockedAt = new Date();
+  }
+  
+  return this.save();
+};
+
+// Instance method to check if user is blocked
+userSchema.methods.isUserBlocked = function() {
+  return this.securityProfile && this.securityProfile.isBlocked;
+};
+
+// Instance method to unblock user (admin only)
+userSchema.methods.unblockUser = function() {
+  if (this.securityProfile) {
+    this.securityProfile.isBlocked = false;
+    this.securityProfile.blockReason = null;
+    this.securityProfile.blockedAt = null;
+  }
+  return this.save();
+};
+
+// Instance method to get security violations for admin
+userSchema.methods.getSecurityViolations = function() {
+  return this.securityProfile ? this.securityProfile.securityViolations : [];
+};
+
+// Instance method to add FCM token (updated for single device enforcement)
+userSchema.methods.addFcmToken = function(token, deviceType = 'android', deviceId = null) {
+  if (!this.isAdmin) {
+    // For regular users: only one FCM token (single device)
+    this.fcmTokens = [{
+      token,
+      deviceType,
+      deviceId,
+      lastUsed: new Date(),
+      isActive: true
+    }];
+  } else {
+    // For admins: multiple FCM tokens allowed
+    this.fcmTokens = this.fcmTokens.filter(t => t.token !== token);
+    this.fcmTokens.push({
+      token,
+      deviceType,
+      deviceId,
+      lastUsed: new Date(),
+      isActive: true
+    });
+  }
   
   return this.save();
 };

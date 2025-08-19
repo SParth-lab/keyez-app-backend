@@ -12,6 +12,9 @@ const seedAdmin = require('./scripts/seedAdmin');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const phoneAuthRoutes = require('./routes/phoneAuth');
+const securityRoutes = require('./routes/security');
+const secureMessagingRoutes = require('./routes/secureMessaging');
 const userRoutes = require('./routes/users');
 const chatRoutes = require('./routes/chat');
 const groupRoutes = require('./routes/groups');
@@ -29,6 +32,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/phone-auth', phoneAuthRoutes);
+app.use('/api/security', securityRoutes);
+app.use('/api/secure-messaging', secureMessagingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/groups', groupRoutes);
@@ -46,16 +52,28 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Welcome to the API',
-    version: '1.0.0',
+    message: 'Welcome to Stock Market Communication API',
+    version: '2.0.0',
+    description: 'Secure chatbot dashboard system for stock market communication',
     endpoints: {
       health: '/health',
       auth: '/api/auth',
+      phoneAuth: '/api/phone-auth',
+      security: '/api/security',
+      secureMessaging: '/api/secure-messaging',
       users: '/api/users',
       chat: '/api/chat',
       groups: '/api/groups',
       notifications: '/api/notifications'
-    }
+    },
+    features: [
+      'Phone number authentication',
+      'Single device login enforcement',
+      'Screenshot prevention & detection',
+      'Message formatting for admins',
+      'Security violation tracking',
+      'Real-time secure messaging'
+    ]
   });
 });
 
