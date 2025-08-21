@@ -5,7 +5,7 @@ const GroupMessage = require('../models/GroupMessage');
 const Group = require('../models/Group');
 const User = require('../models/User');
 const { getDatabase } = require('../config/firebase');
-const FirebaseNotificationService = require('../services/firebaseNotificationService');
+const SimpleNotificationService = require('../services/simpleNotificationService');
 
 const router = express.Router();
 
@@ -164,8 +164,8 @@ router.post('/send', authenticateUser, async (req, res) => {
     // Push to Firebase for real-time updates
     await pushToFirebase(messageData);
 
-    // Send notification to recipient using Firebase-only service
-    const notificationResult = await FirebaseNotificationService.sendMessageNotification(
+    // Send FCM notification to recipient
+    const notificationResult = await SimpleNotificationService.sendMessageNotification(
       message, 
       req.user, 
       recipient
@@ -178,13 +178,9 @@ router.post('/send', authenticateUser, async (req, res) => {
         firebasePath: `chats/${[from.toString(), to.toString()].sort().join('_')}`,
         messageId: message._id.toString()
       },
-      notification: notificationResult.success ? {
-        sent: true,
-        notificationId: notificationResult.notification?.id,
-        pushSent: notificationResult.pushResult?.success || false
-      } : {
-        sent: false,
-        reason: notificationResult.reason || notificationResult.error
+      notification: {
+        sent: notificationResult.success,
+        reason: notificationResult.reason || notificationResult.error || 'FCM notification sent'
       }
     });
 
@@ -245,8 +241,8 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
 
     await pushGroupToFirebase(data);
 
-    // Send notifications to all group members except sender
-    const notificationResult = await FirebaseNotificationService.sendGroupMessageNotification(
+    // Send FCM notifications to all group members except sender
+    const notificationResult = await SimpleNotificationService.sendGroupMessageNotification(
       message,
       req.user,
       group
@@ -258,14 +254,12 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
       realtime: {
         firebasePath: `group_chats/${groupId}`,
       },
-      notifications: notificationResult.success ? {
-        sent: true,
-        totalNotifications: notificationResult.totalNotifications,
-        successfulNotifications: notificationResult.successfulNotifications,
-        details: notificationResult.results
-      } : {
-        sent: false,
-        error: notificationResult.error
+      notifications: {
+        sent: notificationResult.success,
+        totalMembers: notificationResult.totalMembers || 0,
+        successCount: notificationResult.successCount || 0,
+        message: notificationResult.message || 'FCM notifications sent',
+        error: notificationResult.error || null
       }
     });
   } catch (error) {

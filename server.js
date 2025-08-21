@@ -15,7 +15,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const chatRoutes = require('./routes/chat');
 const groupRoutes = require('./routes/groups');
-const firebaseNotificationRoutes = require('./routes/firebaseNotifications');
+const notificationRoutes = require('./routes/simpleNotifications');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,7 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/groups', groupRoutes);
-app.use('/api/notifications', firebaseNotificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -59,8 +59,8 @@ app.get('/', (req, res) => {
     },
     features: [
       'Real-time messaging',
-      'Group chat functionality',
-      'Firebase notifications',
+      'Group chat functionality', 
+      'Simple FCM notifications',
       'Admin dashboard',
       'User management'
     ]
