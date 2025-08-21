@@ -14,6 +14,7 @@ const authenticateToken = (req, res, next) => {
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
   }
+  console.log("token", process.env.JWT_SECRET);
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
@@ -23,11 +24,26 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Middleware to check if user is admin
-const requireAdmin = (req, res, next) => {
-  if (!req.user.isAdmin) {
-    return res.status(403).json({ error: 'Admin access required' });
+const requireAdmin = async (req, res, next) => {
+  try {
+    // Fetch user from database to check admin status
+    const user = await User.findById(req.user.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (!user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Attach full user object to request for later use
+    req.userDoc = user;
+    next();
+  } catch (error) {
+    console.error('Admin check error:', error);
+    res.status(500).json({ error: 'Authorization check failed' });
   }
-  next();
 };
 
 /**
