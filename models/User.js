@@ -33,12 +33,10 @@ const userSchema = new mongoose.Schema({
   phoneNumber: {
     type: String,
     trim: true,
-    required: function() {
-      return !this.isAdmin; // Required for regular users only
-    },
+    required: false, // Optional field
     unique: true,
     sparse: true,
-    match: [/^\+[1-9]\d{1,14}$/, 'Please provide a valid phone number with country code']
+    match: [/^\d{10}$/, 'Please provide a valid 10-digit phone number']
   },
   avatar: {
     type: String,
@@ -134,8 +132,6 @@ userSchema.methods.addFcmToken = function(token, deviceType = 'android', deviceI
       token,
       deviceType,
       deviceId,
-      lastUsed: new Date(),
-      isActive: true
     }];
   } else {
     // For admins: multiple FCM tokens allowed
@@ -143,9 +139,7 @@ userSchema.methods.addFcmToken = function(token, deviceType = 'android', deviceI
     this.fcmTokens.push({
       token,
       deviceType,
-      deviceId,
-      lastUsed: new Date(),
-      isActive: true
+      deviceId
     });
   }
   

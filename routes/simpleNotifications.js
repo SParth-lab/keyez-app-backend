@@ -44,13 +44,13 @@ router.post('/fcm/register', authenticateToken, async (req, res) => {
     }
 
     // Verify token validity
-    const tokenValidation = await verifyFcmToken(token);
-    if (!tokenValidation.valid) {
-      return res.status(400).json({ 
-        error: 'Invalid FCM token', 
-        details: tokenValidation.error 
-      });
-    }
+    // const tokenValidation = await verifyFcmToken(token);
+    // if (!tokenValidation.valid) {
+    //   return res.status(400).json({ 
+    //     error: 'Invalid FCM token', 
+    //     details: tokenValidation.error 
+    //   });
+    // }
 
     // Find user and add FCM token
     const user = await User.findById(req.user.userId);
