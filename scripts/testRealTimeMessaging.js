@@ -96,25 +96,12 @@ class RealTimeMessagingTest {
           { phoneNumber: `+1555000000${i}` },
           {
             phoneNumber: `+1555000000${i}`,
-            firebaseUid: `test_firebase_uid_${i}`,
             isAdmin: false,
             fcmTokens: [{
               token: `user_${i}_test_token_123`,
               deviceType: 'android',
               deviceId: `user_${i}_device_1`
-            }],
-            activeSession: {
-              deviceFingerprint: `device_${i}_fingerprint`,
-              sessionToken: `session_token_${i}`,
-              loginTime: new Date(),
-              deviceInfo: {
-                platform: 'android',
-                version: '12.0',
-                model: `TestDevice${i}`,
-                appVersion: '1.0.0'
-              },
-              isActive: true
-            }
+            }]
           },
           { upsert: true, new: true }
         );

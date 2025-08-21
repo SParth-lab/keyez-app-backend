@@ -30,13 +30,7 @@ async function setupTestUsers() {
     username: 'testadmin',
     password: 'password123',
     email: 'admin@test.com',
-    isAdmin: true,
-    notificationSettings: {
-      pushEnabled: true,
-      messageNotifications: true,
-      systemNotifications: true,
-      announcementNotifications: true
-    }
+    isAdmin: true
   });
   
   if (adminUser.isNew) {
@@ -51,13 +45,7 @@ async function setupTestUsers() {
     username: 'testuser',
     password: 'password123',
     email: 'user@test.com',
-    isAdmin: false,
-    notificationSettings: {
-      pushEnabled: true,
-      messageNotifications: true,
-      systemNotifications: true,
-      announcementNotifications: true
-    }
+    isAdmin: false
   });
 
   // Add a fake FCM token for testing

@@ -371,35 +371,16 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
 
 /**
  * @route PUT /api/notifications/settings
- * @desc Update notification settings for current user
+ * @desc Update notification settings for current user (Simplified - all notifications enabled by default)
  * @access Private (Regular Users and Admins)
  */
 router.put('/settings', authenticateToken, async (req, res) => {
   try {
-    const { 
-      pushEnabled, 
-      messageNotifications, 
-      systemNotifications, 
-      announcementNotifications 
-    } = req.body;
-
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const settings = {};
-    if (typeof pushEnabled === 'boolean') settings.pushEnabled = pushEnabled;
-    if (typeof messageNotifications === 'boolean') settings.messageNotifications = messageNotifications;
-    if (typeof systemNotifications === 'boolean') settings.systemNotifications = systemNotifications;
-    if (typeof announcementNotifications === 'boolean') settings.announcementNotifications = announcementNotifications;
-
-    await user.updateNotificationSettings(settings);
-
+    // Since we removed notificationSettings, all notifications are enabled by default
     res.json({
       success: true,
-      message: 'Notification settings updated successfully',
-      settings: user.notificationSettings
+      message: 'Notification settings simplified - all notifications are enabled by default',
+      note: 'Notification settings functionality has been simplified. All notifications are now enabled by default.'
     });
 
   } catch (error) {

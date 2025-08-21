@@ -35,12 +35,7 @@ async function setupTestData() {
       password: 'password123',
       email: 'admin@test.com',
       isAdmin: true,
-      notificationSettings: {
-        pushEnabled: false, // Admins don't get push notifications
-        messageNotifications: true,
-        systemNotifications: true,
-        announcementNotifications: true
-      }
+
     });
     await adminUser.save();
     console.log('✅ Created test admin user');
@@ -53,13 +48,7 @@ async function setupTestData() {
       username: 'testuser1',
       password: 'password123',
       email: 'user1@test.com',
-      isAdmin: false,
-      notificationSettings: {
-        pushEnabled: true,
-        messageNotifications: true,
-        systemNotifications: true,
-        announcementNotifications: true
-      }
+      isAdmin: false
     });
     
     // Add fake FCM token
@@ -78,13 +67,7 @@ async function setupTestData() {
       username: 'testuser2',
       password: 'password123',
       email: 'user2@test.com',
-      isAdmin: false,
-      notificationSettings: {
-        pushEnabled: true,
-        messageNotifications: true,
-        systemNotifications: true,
-        announcementNotifications: true
-      }
+      isAdmin: false
     });
     
     // Add fake FCM token
@@ -112,7 +95,7 @@ async function setupTestData() {
   }
 
   // Populate group members
-  await testGroup.populate('members', 'username isAdmin avatar notificationSettings fcmTokens');
+  await testGroup.populate('members', 'username isAdmin avatar fcmTokens');
 
   return { adminUser, regularUser1, regularUser2, testGroup };
 }

@@ -66,15 +66,10 @@ class FirebaseNotificationService {
   }
 
   /**
-   * Send notification when a new message is received
+   * Send message notification to recipient
    */
   static async sendMessageNotification(message, sender, recipient) {
     try {
-      // Check if user has message notifications enabled
-      if (!recipient.notificationSettings.messageNotifications) {
-        return { success: false, reason: 'User has disabled message notifications' };
-      }
-
       // Determine notification handling based on recipient type
       let shouldSendPushNotification = true;
       let notificationTitle;
@@ -95,7 +90,7 @@ class FirebaseNotificationService {
       } else {
         // Regular user receiving message - send both Firebase and push notification
         notificationTitle = `New message from ${sender.username}`;
-        shouldSendPushNotification = recipient.notificationSettings.pushEnabled;
+        shouldSendPushNotification = true; // Regular users get push notifications by default
         notificationData = {
           messageId: message._id,
           senderId: sender._id,
@@ -198,16 +193,7 @@ class FirebaseNotificationService {
       for (const member of recipients) {
         totalNotifications++;
 
-        // Check if member has message notifications enabled
-        if (!member.notificationSettings || !member.notificationSettings.messageNotifications) {
-          results.push({
-            userId: member._id,
-            username: member.username,
-            success: false,
-            reason: 'User has disabled message notifications'
-          });
-          continue;
-        }
+        // All members get notifications by default
 
         // Determine notification handling based on member type
         let shouldSendPushNotification = true;
@@ -231,7 +217,7 @@ class FirebaseNotificationService {
           shouldSendPushNotification = false;
         } else {
           // Regular user receiving group message - send both Firebase and push notification
-          shouldSendPushNotification = member.notificationSettings.pushEnabled;
+          shouldSendPushNotification = true; // Regular users get push notifications by default
         }
 
         // Create notification data
@@ -350,7 +336,7 @@ class FirebaseNotificationService {
 
       // Send push notification if enabled
       let pushResult = null;
-      if (options.sendPush !== false && user.notificationSettings.pushEnabled) {
+      if (options.sendPush !== false) {
         const userTokens = user.getActiveFcmTokens();
         
         if (userTokens.length > 0) {
@@ -718,20 +704,11 @@ class FirebaseNotificationService {
 
   /**
    * Check if notification should be sent based on user preferences
+   * Simplified - all notifications are enabled by default
    */
   static shouldSendNotification(user, type) {
-    const settings = user.notificationSettings;
-
-    switch (type) {
-      case 'message':
-        return settings.messageNotifications;
-      case 'system':
-        return settings.systemNotifications;
-      case 'announcement':
-        return settings.announcementNotifications;
-      default:
-        return true;
-    }
+    // All notifications are enabled by default since we removed notificationSettings
+    return true;
   }
 
   /**
