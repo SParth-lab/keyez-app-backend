@@ -121,7 +121,7 @@ userSchema.statics.findByUsername = function(username) {
 
 // Static method to find by phone number
 userSchema.statics.findByPhoneNumber = function(phoneNumber) {
-  return this.findOne({ phoneNumber: phoneNumber });
+  return this.findOne({ phoneNumber: phoneNumber.trim() });
 };
 
 // Instance method to add FCM token (updated for single device enforcement)

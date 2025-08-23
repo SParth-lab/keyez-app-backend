@@ -67,15 +67,15 @@ router.post('/register', async (req, res) => {
 // Login user (users & admin)
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, phoneNumber } = req.body;
 
     // Validate input
-    if (!username || !password) {
+    if (!password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
     // Find user by username
-    const user = await User.findByUsername(username);
+    const user = await User.findByUsername(username) || await User.findByPhoneNumber(phoneNumber.trim());
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
