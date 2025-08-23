@@ -154,9 +154,7 @@ userSchema.methods.removeFcmToken = function(token) {
 
 // Instance method to get active FCM tokens
 userSchema.methods.getActiveFcmTokens = function() {
-  return this.fcmTokens
-    .filter(t => t.isActive)
-    .map(t => t.token);
+  return this.fcmTokens?.filter(t => t?.isActive)?.map(t => t?.token) || [];
 };
 
 // Static method to find users with FCM tokens (for broadcast notifications)

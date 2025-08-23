@@ -203,18 +203,12 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
     }
 
-    const group = await Group.findById(groupId).populate('members', 'username isAdmin avatar');
+    const group = await Group.findById(groupId).populate('members', 'username isAdmin avatar fcmTokens');
     if (!group) {
       return res.status(404).json({ error: 'Group not found' });
     }
     if (!group.isActive) {
       return res.status(400).json({ error: 'Group is inactive' });
-    }
-
-    // Only group members can send messages
-    const isMember = group.members.some((m) => m._id.toString() === req.user._id.toString());
-    if (!isMember) {
-      return res.status(403).json({ error: 'You must be a member of this group to send messages' });
     }
 
     // Create and save message
