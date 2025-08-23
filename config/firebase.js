@@ -33,12 +33,13 @@ const initializeFirebase = async () => {
     };
 
     // Initialize Firebase Admin SDK
+    const projectIdForDb = serviceAccount.project_id;
     firebaseApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`
     });
 
-    console.log('Firebase Admin SDK initialized successfully');
+    console.log('Firebase Admin SDK initialized successfully', [firebaseApp]);
     
     return firebaseApp;
 
@@ -105,34 +106,43 @@ const sendPushNotification = async (tokens, notification, data = {}) => {
       throw new Error('No FCM tokens provided');
     }
 
-    const message = {
-      notification: {
-        title: notification.title,
-        body: notification.body
-      },
-      data: {
-        ...data,
-        notificationId: data.notificationId || '',
-        type: data.type || 'system',
-        priority: data.priority || 'normal'
-      },
-      tokens: tokenArray
-    };
+    // Send individually to avoid Google APIs /batch endpoint
+    const results = await Promise.all(tokenArray.map(async (token) => {
+      try {
+        const message = {
+          notification: {
+            title: notification.title,
+            body: notification.body
+          },
+          data: {
+            ...data,
+            notificationId: data.notificationId || '',
+            type: data.type || 'system',
+            priority: data.priority || 'normal'
+          },
+          token
+        };
+        const messageId = await messaging.send(message);
+        return { success: true, messageId };
+      } catch (err) {
+        return { success: false, error: err };
+      }
+    }));
 
-    const response = await messaging.sendMulticast(message);
-    
-    console.log(`✅ Push notification sent successfully:`, {
-      successCount: response.successCount,
-      failureCount: response.failureCount,
-      totalTokens: tokenArray.length
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.length - successCount;
+
+    console.log(`✅ Push notification results:`, {
+      successCount,
+      failureCount,
+      totalTokens: results.length
     });
 
     return {
-      success: true,
-      response,
-      successCount: response.successCount,
-      failureCount: response.failureCount,
-      results: response.responses
+      success: successCount > 0,
+      successCount,
+      failureCount,
+      results
     };
 
   } catch (error) {
@@ -170,7 +180,8 @@ const sendNotificationToToken = async (token, notification, data = {}) => {
 
     const response = await messaging.send(message);
     
-    console.log(`✅ Push notification sent to token: ${token.substring(0, 20)}...`);
+    const tokenPreview = typeof token === 'string' ? token.substring(0, 20) + '...' : 'unknown';
+    console.log(`✅ Push notification sent to token: ${tokenPreview}`);
     return {
       success: true,
       messageId: response,
@@ -178,7 +189,8 @@ const sendNotificationToToken = async (token, notification, data = {}) => {
     };
 
   } catch (error) {
-    console.error(`❌ Failed to send notification to token ${token.substring(0, 20)}...:`, error);
+    const failTokenPreview = typeof token === 'string' ? token.substring(0, 20) + '...' : 'unknown';
+    console.error(`❌ Failed to send notification to token ${failTokenPreview}:`, error);
     return {
       success: false,
       error: error.message,
@@ -209,7 +221,8 @@ const verifyFcmToken = async (token) => {
     return { valid: true };
 
   } catch (error) {
-    console.warn(`Invalid FCM token: ${token.substring(0, 20)}...`, error.message);
+    const verifyTokenPreview = typeof token === 'string' ? token.substring(0, 20) + '...' : 'unknown';
+    console.warn(`Invalid FCM token: ${verifyTokenPreview}`, error.message);
     return { valid: false, error: error.message };
   }
 };

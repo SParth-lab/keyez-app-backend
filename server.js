@@ -86,15 +86,12 @@ async function startServer() {
   try {
     // Connect to MongoDB
     await connectDB();
-    console.log('✅ MongoDB connected successfully');
 
     // Initialize Firebase
     await initializeFirebase();
-    console.log('✅ Firebase initialized successfully');
 
     // Seed admin user
     await seedAdmin();
-    console.log('✅ Admin user seeded successfully');
 
     // Start server
     app.listen(PORT, () => {
