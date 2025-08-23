@@ -278,11 +278,11 @@ router.post('/send', authenticateToken, requireAdmin, async (req, res) => {
         data
       });
 
-      await notification.save();
       notifications.push(notification);
+      await notification.save();
 
       // Send push notification if enabled and user has tokens
-      if (sendPush && user.notificationSettings.pushEnabled) {
+      if (sendPush) {
         const userTokens = user.getActiveFcmTokens();
         
         if (userTokens.length > 0) {
