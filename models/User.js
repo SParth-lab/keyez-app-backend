@@ -46,6 +46,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
   // FCM tokens for push notifications (single device for users, multiple for admins)
   fcmTokens: [{
     token: {
@@ -116,12 +121,22 @@ userSchema.methods.getPublicProfile = function() {
 
 // Static method to find by username
 userSchema.statics.findByUsername = function(username) {
-  return this.findOne({ username: username.toLowerCase() });
+  return this.findOne({ username: username.toLowerCase(), isDeleted: false });
 };
 
 // Static method to find by phone number
 userSchema.statics.findByPhoneNumber = function(phoneNumber) {
-  return this.findOne({ phoneNumber: phoneNumber.trim() });
+  return this.findOne({ phoneNumber: phoneNumber.trim(), isDeleted: false });
+};
+
+// Query helper to exclude deleted users
+userSchema.query.notDeleted = function() {
+  return this.where({ isDeleted: false });
+};
+
+// Static helper to get active user by id
+userSchema.statics.findActiveById = function(id) {
+  return this.findById(id).notDeleted();
 };
 
 // Instance method to add FCM token (updated for single device enforcement)
@@ -161,7 +176,8 @@ userSchema.methods.getActiveFcmTokens = function() {
 userSchema.statics.findUsersWithTokens = function() {
   return this.find({ 
     'fcmTokens.0': { $exists: true },
-    'fcmTokens.isActive': true 
+    'fcmTokens.isActive': true,
+    isDeleted: false 
   });
 };
 

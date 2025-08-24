@@ -36,15 +36,23 @@ const requireAdmin = async (req, res, next) => {
 // Get all users (admin only)
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 10, isAdmin, search } = req.query;
+    const { page = 1, limit = 10, role, search, status } = req.query;
     
     const query = {};
     
-    if (isAdmin !== undefined) query.isAdmin = isAdmin === 'true';
+    if (role) {
+      query.isAdmin = role === 'admin';
+    } else {
+      query.isAdmin = false
+    }
+    if (status) {
+      query.isDeleted = status === "active" ? false : true
+    } else {
+      query.isDeleted = false
+    }
     if (search) {
       query.username = { $regex: search, $options: 'i' };
     }
-
     const users = await User.find(query)
       .select('-password')
       .limit(limit * 1)
@@ -69,7 +77,7 @@ router.get('/', requireAdmin, async (req, res) => {
 // Get user by ID (admin only)
 router.get('/:id', requireAdmin, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findOne({ _id: req.params.id, isDeleted: false }).select('-password');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -86,7 +94,7 @@ router.get('/:id', requireAdmin, async (req, res) => {
 // Update user (admin only)
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
-    const { username, isAdmin, email, phoneNumber, avatar } = req.body;
+    const { username, email, phoneNumber, avatar, isDeleted } = req.body;
     
     const user = await User.findById(req.params.id);
     
@@ -96,10 +104,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     // Update allowed fields
     if (username) user.username = username;
-    if (typeof isAdmin === 'boolean') user.isAdmin = isAdmin;
     if (email !== undefined) user.email = email;
     if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
     if (avatar !== undefined) user.avatar = avatar;
+    if (typeof isDeleted === 'boolean') user.isDeleted = isDeleted;
 
     await user.save();
 
@@ -131,9 +139,11 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       }
     }
 
-    await User.findByIdAndDelete(req.params.id);
+    // Soft delete instead of hard delete
+    user.isDeleted = true;
+    await user.save();
 
-    res.json({ message: 'User deleted successfully' });
+    res.json({ message: 'User soft-deleted successfully' });
 
   } catch (error) {
     console.error('Delete user error:', error);
@@ -152,6 +162,7 @@ router.get('/admins/public', async (req, res) => {
       query.username = { $regex: search, $options: 'i' };
     }
 
+    query.isDeleted = false;
     const adminUsers = await User.find(query)
       .select('-password')
       .limit(limit * 1)
@@ -177,7 +188,7 @@ router.get('/admins/public', async (req, res) => {
 // Get admin users count (no authentication required)
 router.get('/admins/public/count', async (req, res) => {
   try {
-    const adminCount = await User.countDocuments({ isAdmin: true });
+    const adminCount = await User.countDocuments({ isAdmin: true, isDeleted: false });
     
     res.json({
       adminCount,
@@ -260,3 +271,21 @@ router.post('/bulk', requireAdmin, async (req, res) => {
 });
 
 module.exports = router; 
+ 
+// Restore user (admin only)
+router.post('/:id/restore', requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    user.isDeleted = false;
+    await user.save();
+
+    res.json({ message: 'User restored successfully', user: user.getPublicProfile() });
+  } catch (error) {
+    console.error('Restore user error:', error);
+    res.status(500).json({ error: 'Failed to restore user' });
+  }
+});
