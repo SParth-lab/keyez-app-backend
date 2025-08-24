@@ -74,8 +74,14 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
+    let user;
     // Find user by username
-    const user = await User.findByUsername(username) || await User.findByPhoneNumber(phoneNumber.trim());
+    if (username) {
+      user = await User.findByUsername(username);
+    } else {
+      user = await User.findByPhoneNumber(phoneNumber.trim());
+    }
+    
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
