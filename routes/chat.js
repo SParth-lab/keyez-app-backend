@@ -95,19 +95,19 @@ const pushGroupToFirebase = async (groupMessageData) => {
 // Send message endpoint
 router.post('/send', authenticateUser, async (req, res) => {
   try {
-    const { to, text } = req.body;
+    const { to, text, imageUrl } = req.body;
     const from = req.user._id;
 
     // Validate input
-    if (!to || !text) {
-      return res.status(400).json({ error: 'Recipient and message text are required' });
+    if (!to) {
+      return res.status(400).json({ error: 'Recipient is required' });
     }
-
-    if (text.trim().length === 0) {
-      return res.status(400).json({ error: 'Message text cannot be empty' });
+    const normalizedText = typeof text === 'string' ? text.trim() : '';
+    const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+    if (!normalizedText && !normalizedImageUrl) {
+      return res.status(400).json({ error: 'Either text or imageUrl is required' });
     }
-
-    if (text.length > 1000) {
+    if (normalizedText && normalizedText.length > 1000) {
       return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
     }
 
@@ -133,7 +133,8 @@ router.post('/send', authenticateUser, async (req, res) => {
     const message = new Message({
       from,
       to,
-      text: text.trim()
+      text: normalizedText || undefined,
+      imageUrl: normalizedImageUrl || undefined
     });
 
     await message.save();
@@ -157,7 +158,8 @@ router.post('/send', authenticateUser, async (req, res) => {
         isAdmin: message.to.isAdmin,
         avatar: message.to.avatar || null
       },
-      text: message.text,
+      text: message.text || null,
+      imageUrl: message.imageUrl || null,
       timestamp: message.timestamp.getTime()
     };
 
@@ -166,8 +168,8 @@ router.post('/send', authenticateUser, async (req, res) => {
 
     // Send FCM notification to recipient
     const notificationResult = await SimpleNotificationService.sendMessageNotification(
-      message, 
-      req.user, 
+      message,
+      req.user,
       recipient
     );
 
@@ -194,12 +196,14 @@ router.post('/send', authenticateUser, async (req, res) => {
 router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { text } = req.body;
+    const { text, imageUrl } = req.body;
 
-    if (!text || text.trim().length === 0) {
-      return res.status(400).json({ error: 'Message text cannot be empty' });
+    const normalizedText = typeof text === 'string' ? text.trim() : '';
+    const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+    if (!normalizedText && !normalizedImageUrl) {
+      return res.status(400).json({ error: 'Either text or imageUrl is required' });
     }
-    if (text.length > 1000) {
+    if (normalizedText && normalizedText.length > 1000) {
       return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
     }
 
@@ -215,7 +219,8 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
     const message = new GroupMessage({
       group: groupId,
       from: req.user._id,
-      text: text.trim(),
+      text: normalizedText || undefined,
+      imageUrl: normalizedImageUrl || undefined,
     });
     await message.save();
     await message.populate('from', 'username isAdmin avatar');
@@ -229,7 +234,8 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
         isAdmin: message.from.isAdmin,
         avatar: message.from.avatar || null,
       },
-      text: message.text,
+      text: message.text || null,
+      imageUrl: message.imageUrl || null,
       timestamp: message.timestamp.getTime(),
     };
 
@@ -341,6 +347,7 @@ router.get('/messages/:userId', authenticateUser, async (req, res) => {
         avatar: msg.to.avatar || null
       },
       text: msg.text,
+      imageUrl: msg.imageUrl || null,
       timestamp: msg.timestamp,
       formattedTimestamp: msg.formattedTimestamp
     }));
@@ -390,7 +397,8 @@ router.get('/conversations', authenticateUser, async (req, res) => {
       if (!conversations[partnerId].lastMessage || 
           msg.timestamp > conversations[partnerId].lastMessage.timestamp) {
         conversations[partnerId].lastMessage = {
-          text: msg.text,
+          text: msg.text || (msg.imageUrl ? '[Image]' : ''),
+          imageUrl: msg.imageUrl || null,
           timestamp: msg.timestamp,
           formattedTimestamp: msg.formattedTimestamp
         };

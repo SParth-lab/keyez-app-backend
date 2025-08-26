@@ -14,9 +14,24 @@ const groupMessageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: [true, 'Message text is required'],
       trim: true,
       maxlength: [1000, 'Message cannot be more than 1000 characters'],
+    },
+    imageUrl: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function(v) {
+          if (!v) return true;
+          try {
+            new URL(v);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+        message: 'Invalid image URL'
+      }
     },
     timestamp: {
       type: Date,
@@ -41,6 +56,7 @@ groupMessageSchema.methods.getPublicData = function () {
     group: this.group,
     from: this.from,
     text: this.text,
+    imageUrl: this.imageUrl || null,
     timestamp: this.timestamp,
     formattedTimestamp: this.formattedTimestamp,
   };

@@ -13,9 +13,25 @@ const messageSchema = new mongoose.Schema({
   },
   text: {
     type: String,
-    required: [true, 'Message text is required'],
     trim: true,
     maxlength: [1000, 'Message cannot be more than 1000 characters']
+  },
+  imageUrl: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
+        // Basic URL validation
+        try {
+          new URL(v);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      },
+      message: 'Invalid image URL'
+    }
   },
   timestamp: {
     type: Date,
@@ -23,6 +39,14 @@ const messageSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+// Ensure either text or imageUrl is present
+messageSchema.pre('validate', function(next) {
+  if (!this.text && !this.imageUrl) {
+    this.invalidate('text', 'Either text or imageUrl is required');
+  }
+  next();
 });
 
 // Indexes for efficient querying
@@ -42,6 +66,7 @@ messageSchema.methods.getPublicData = function() {
     from: this.from,
     to: this.to,
     text: this.text,
+    imageUrl: this.imageUrl || null,
     timestamp: this.timestamp,
     formattedTimestamp: this.formattedTimestamp
   };
