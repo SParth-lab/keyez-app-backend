@@ -44,7 +44,7 @@ const pushToFirebase = async (messageData) => {
     }
 
     const database = getDatabase();
-    const { from, to, text, timestamp } = messageData;
+    const { from, to, text, timestamp, imageUrl } = messageData;
     
     // Create chat path: chats/{fromId}_{toId} (sorted to ensure consistent path)
     const fromId = from.id || from.toString();
@@ -60,6 +60,7 @@ const pushToFirebase = async (messageData) => {
       to: messageData.to,
       text: messageData.text,
       timestamp: timestamp,
+      imageUrl: messageData.imageUrl,
       formattedTimestamp: new Date(timestamp).toISOString()
     });
 
@@ -143,6 +144,7 @@ router.post('/send', authenticateUser, async (req, res) => {
     await message.populate('from', 'username isAdmin avatar');
     await message.populate('to', 'username isAdmin avatar');
 
+    console.log("🚀 ~ from:", message)
     // Prepare message data for Firebase
     const messageData = {
       id: message._id.toString(),
@@ -293,6 +295,7 @@ router.get('/groups/:groupId/messages', authenticateUser, async (req, res) => {
         avatar: msg.from.avatar || null,
       },
       text: msg.text,
+      imageUrl: msg.imageUrl || null,
       timestamp: msg.timestamp,
       formattedTimestamp: msg.formattedTimestamp,
     }));
