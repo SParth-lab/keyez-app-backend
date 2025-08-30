@@ -102,13 +102,13 @@ class SimpleNotificationService {
           groupName: group.name,
           senderId: sender._id.toString(),
           senderUsername: sender.username,
-          imageUrl: message.imageUrl || null,
+          imageUrl: message?.imageUrl || null,
           chatType: 'group'
         };
 
         // Send FCM notification
         const result = await sendPushNotification(fcmTokens, { title, body }, data);
-        
+        console.log('result', [result, fcmTokens]);
         if (result.success) {
           console.log(`✅ FCM group notification sent to ${member.username}`);
           successCount++;
