@@ -375,6 +375,16 @@ router.get('/conversations', authenticateUser, async (req, res) => {
     // Get all messages for the current user
     const messages = await Message.findUserMessages(currentUserId);
 
+    // Get unread counts for current user
+    const unreadCounts = await Message.getUnreadCountsForUser(currentUserId);
+    const unreadMap = {};
+    unreadCounts.forEach(item => {
+      unreadMap[item.partnerId.toString()] = {
+        unreadCount: item.unreadCount,
+        lastMessageTime: item.lastMessageTime
+      };
+    });
+
     // Group messages by conversation partner
     const conversations = {};
     
@@ -390,6 +400,8 @@ router.get('/conversations', authenticateUser, async (req, res) => {
             : { id: msg.from._id, username: msg.from.username, isAdmin: msg.from.isAdmin },
           lastMessage: null,
           messageCount: 0,
+          unreadCount: unreadMap[partnerId]?.unreadCount || 0,
+          lastMessageTime: unreadMap[partnerId]?.lastMessageTime || null,
           firebasePath: `chats/${[currentUserId.toString(), partnerId].sort().join('_')}`
         };
       }
@@ -423,6 +435,33 @@ router.get('/conversations', authenticateUser, async (req, res) => {
   } catch (error) {
     console.error('Get conversations error:', error);
     res.status(500).json({ error: 'Failed to retrieve conversations' });
+  }
+});
+
+// Mark messages as read between current user and another user
+router.put('/messages/:userId/mark-read', authenticateUser, async (req, res) => {
+  try {
+    const currentUserId = req.user._id;
+    const otherUserId = req.params.userId;
+
+    // Validate the other user exists
+    const targetUser = await User.findById(otherUserId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Mark all messages from the other user to current user as read
+    const result = await Message.markAsRead(otherUserId, currentUserId, currentUserId);
+
+    res.json({
+      success: true,
+      modifiedCount: result.modifiedCount,
+      message: 'Messages marked as read'
+    });
+
+  } catch (error) {
+    console.error('Mark messages as read error:', error);
+    res.status(500).json({ error: 'Failed to mark messages as read' });
   }
 });
 

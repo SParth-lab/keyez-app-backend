@@ -36,7 +36,18 @@ const messageSchema = new mongoose.Schema({
   timestamp: {
     type: Date,
     default: Date.now
-  }
+  },
+  readBy: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    readAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });
@@ -104,6 +115,65 @@ messageSchema.statics.findReceivedByUser = function(userId) {
   return this.find({ to: userId })
     .sort({ timestamp: -1 })
     .populate('from', 'username isAdmin avatar');
+};
+
+// Static method to get unread count for conversations
+messageSchema.statics.getUnreadCountsForUser = function(userId) {
+  return this.aggregate([
+    {
+      $match: {
+        to: userId, // Messages received by the user
+        'readBy.user': { $ne: userId } // Not read by this user
+      }
+    },
+    {
+      $group: {
+        _id: '$from',
+        unreadCount: { $sum: 1 },
+        lastMessageTime: { $max: '$timestamp' }
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'fromUser'
+      }
+    },
+    {
+      $unwind: '$fromUser'
+    },
+    {
+      $project: {
+        partnerId: '$_id',
+        partnerUsername: '$fromUser.username',
+        partnerIsAdmin: '$fromUser.isAdmin',
+        partnerAvatar: '$fromUser.avatar',
+        unreadCount: 1,
+        lastMessageTime: 1
+      }
+    }
+  ]);
+};
+
+// Static method to mark messages as read
+messageSchema.statics.markAsRead = function(fromUserId, toUserId, readByUserId) {
+  return this.updateMany(
+    {
+      from: fromUserId,
+      to: toUserId,
+      'readBy.user': { $ne: readByUserId }
+    },
+    {
+      $push: {
+        readBy: {
+          user: readByUserId,
+          readAt: new Date()
+        }
+      }
+    }
+  );
 };
 
 module.exports = mongoose.model('Message', messageSchema); 
