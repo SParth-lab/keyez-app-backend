@@ -6,6 +6,7 @@ const Group = require('../models/Group');
 const User = require('../models/User');
 const { getDatabase } = require('../config/firebase');
 const SimpleNotificationService = require('../services/simpleNotificationService');
+const firebaseUnreadService = require('../services/firebaseUnreadService');
 
 const router = express.Router();
 
@@ -168,6 +169,9 @@ router.post('/send', authenticateUser, async (req, res) => {
     // Push to Firebase for real-time updates
     await pushToFirebase(messageData);
 
+    // Increment unread count in Firebase for recipient
+    await firebaseUnreadService.incrementDirectUnreadCount(to.toString(), from.toString());
+
     // Send FCM notification to recipient
     const notificationResult = await SimpleNotificationService.sendMessageNotification(
       message,
@@ -242,6 +246,10 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
     };
 
     await pushGroupToFirebase(data);
+
+    // Increment unread count in Firebase for all group members except sender
+    const memberIds = group.members.map(member => member._id.toString());
+    await firebaseUnreadService.incrementGroupUnreadCount(groupId, req.user._id.toString(), memberIds);
 
     // Send FCM notifications to all group members except sender
     const notificationResult = await SimpleNotificationService.sendGroupMessageNotification(
@@ -453,6 +461,9 @@ router.put('/messages/:userId/mark-read', authenticateUser, async (req, res) => 
     // Mark all messages from the other user to current user as read
     const result = await Message.markAsRead(otherUserId, currentUserId, currentUserId);
 
+    // Clear unread count in Firebase for this conversation
+    await firebaseUnreadService.clearDirectUnreadCount(currentUserId.toString(), otherUserId.toString());
+
     res.json({
       success: true,
       modifiedCount: result.modifiedCount,
@@ -520,6 +531,137 @@ router.get('/received', authenticateUser, async (req, res) => {
   } catch (error) {
     console.error('Get received messages error:', error);
     res.status(500).json({ error: 'Failed to retrieve received messages' });
+  }
+});
+
+// ===== FIREBASE UNREAD COUNT ENDPOINTS =====
+
+// Get all unread counts for current user from Firebase
+router.get('/unread-counts', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const unreadCounts = await firebaseUnreadService.getUserUnreadCounts(userId);
+    
+    res.json({
+      success: true,
+      data: unreadCounts
+    });
+
+  } catch (error) {
+    console.error('Get unread counts error:', error);
+    res.status(500).json({ error: 'Failed to get unread counts' });
+  }
+});
+
+// Get total unread count for current user from Firebase
+router.get('/unread-counts/total', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const totalCount = await firebaseUnreadService.getTotalUnreadCount(userId);
+    
+    res.json({
+      success: true,
+      totalUnreadCount: totalCount
+    });
+
+  } catch (error) {
+    console.error('Get total unread count error:', error);
+    res.status(500).json({ error: 'Failed to get total unread count' });
+  }
+});
+
+// Get unread count for specific direct conversation from Firebase
+router.get('/unread-counts/direct/:partnerId', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const partnerId = req.params.partnerId;
+    
+    // Validate partner exists
+    const partner = await User.findById(partnerId);
+    if (!partner) {
+      return res.status(404).json({ error: 'Partner not found' });
+    }
+
+    const unreadCount = await firebaseUnreadService.getDirectUnreadCount(userId, partnerId);
+    
+    res.json({
+      success: true,
+      partnerId: partnerId,
+      unreadCount: unreadCount
+    });
+
+  } catch (error) {
+    console.error('Get direct unread count error:', error);
+    res.status(500).json({ error: 'Failed to get direct unread count' });
+  }
+});
+
+// Get unread count for specific group from Firebase
+router.get('/unread-counts/group/:groupId', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const groupId = req.params.groupId;
+    
+    // Validate group exists
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const unreadCount = await firebaseUnreadService.getGroupUnreadCount(userId, groupId);
+    
+    res.json({
+      success: true,
+      groupId: groupId,
+      unreadCount: unreadCount
+    });
+
+  } catch (error) {
+    console.error('Get group unread count error:', error);
+    res.status(500).json({ error: 'Failed to get group unread count' });
+  }
+});
+
+// Mark group messages as read (clear group unread count)
+router.put('/groups/:groupId/mark-read', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const groupId = req.params.groupId;
+    
+    // Validate group exists
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Clear unread count in Firebase for this group
+    await firebaseUnreadService.clearGroupUnreadCount(userId, groupId);
+    
+    res.json({
+      success: true,
+      message: 'Group messages marked as read'
+    });
+
+  } catch (error) {
+    console.error('Mark group messages as read error:', error);
+    res.status(500).json({ error: 'Failed to mark group messages as read' });
+  }
+});
+
+// Clear all unread counts for current user
+router.delete('/unread-counts', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    await firebaseUnreadService.clearAllUnreadCounts(userId);
+    
+    res.json({
+      success: true,
+      message: 'All unread counts cleared'
+    });
+
+  } catch (error) {
+    console.error('Clear all unread counts error:', error);
+    res.status(500).json({ error: 'Failed to clear all unread counts' });
   }
 });
 
