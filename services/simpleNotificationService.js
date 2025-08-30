@@ -20,15 +20,16 @@ class SimpleNotificationService {
 
       // Create notification payload
       const title = `New message from ${sender.username}`;
-      const body = message.text.length > 50 
+      const body = message.text ? message.text.length > 50 
         ? `${message.text.substring(0, 50)}...` 
-        : message.text;
+        : message.text : '📷 Image';
 
       const data = {
-        type: 'message',
+        type: message.imageUrl ? 'image' : 'message',
         messageId: message._id.toString(),
         senderId: sender._id.toString(),
         senderUsername: sender.username,
+        imageUrl: message.imageUrl || null,
         chatType: 'direct'
       };
 
@@ -90,17 +91,18 @@ class SimpleNotificationService {
 
         // Create notification payload
         const title = `New message in ${group.name}`;
-        const body = `${sender.username}: ${message.text.length > 50 
+        const body = `${sender.username}: ${message.text ? message.text.length > 50 
           ? `${message.text.substring(0, 50)}...` 
-          : message.text}`;
+          : message.text : '📷 Image'}`;
 
         const data = {
-          type: 'message',
+          type: message.imageUrl ? 'image' : 'message',
           messageId: message._id.toString(),
           groupId: group._id.toString(),
           groupName: group.name,
           senderId: sender._id.toString(),
           senderUsername: sender.username,
+          imageUrl: message.imageUrl || null,
           chatType: 'group'
         };
 
