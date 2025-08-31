@@ -24,14 +24,16 @@ class SimpleNotificationService {
         ? `${message.text.substring(0, 50)}...` 
         : message.text : '📷 Image';
 
-      const data = {
+      let data = {
         type: message.imageUrl ? 'image' : 'message',
         messageId: message._id.toString(),
         senderId: sender._id.toString(),
         senderUsername: sender.username,
-        imageUrl: message.imageUrl || null,
         chatType: 'direct'
       };
+      if (message.imageUrl) {
+        data.imageUrl = message.imageUrl;
+      }
 
       // Send FCM notification
       const result = await sendPushNotification(fcmTokens, { title, body }, data);
@@ -95,16 +97,18 @@ class SimpleNotificationService {
           ? `${message.text.substring(0, 50)}...` 
           : message.text : '📷 Image'}`;
 
-        const data = {
+        let data = {
           type: message.imageUrl ? 'image' : 'message',
           messageId: message._id.toString(),
           groupId: group._id.toString(),
           groupName: group.name,
           senderId: sender._id.toString(),
           senderUsername: sender.username,
-          imageUrl: message?.imageUrl || null,
           chatType: 'group'
         };
+        if (message.imageUrl) {
+          data.imageUrl = message.imageUrl;
+        }
 
         // Send FCM notification
         const result = await sendPushNotification(fcmTokens, { title, body }, data);
