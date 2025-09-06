@@ -17,22 +17,66 @@ const groupMessageSchema = new mongoose.Schema(
       trim: true,
       maxlength: [1000, 'Message cannot be more than 1000 characters'],
     },
-    imageUrl: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: function(v) {
-          if (!v) return true;
-          try {
-            new URL(v);
-            return true;
-          } catch (e) {
-            return false;
-          }
-        },
-        message: 'Invalid image URL'
+    attachments: [{
+      type: {
+        type: String,
+        enum: ['image', 'pdf', 'excel', 'document'],
+        required: true
+      },
+      url: {
+        type: String,
+        required: true,
+        validate: {
+          validator: function(v) {
+            try {
+              new URL(v);
+              return true;
+            } catch (e) {
+              return false;
+            }
+          },
+          message: 'Invalid attachment URL'
+        }
+      },
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: [255, 'File name cannot be more than 255 characters']
+      },
+      size: {
+        type: Number,
+        required: true,
+        min: [1, 'File size must be at least 1 byte'],
+        max: [50 * 1024 * 1024, 'File size cannot exceed 50MB']
+      },
+      mimeType: {
+        type: String,
+        required: true,
+        validate: {
+          validator: function(v) {
+            const allowedTypes = [
+              // Images
+              'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+              // PDFs
+              'application/pdf',
+              // Excel files
+              'application/vnd.ms-excel',
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              // Additional document types
+              'application/msword',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            ];
+            return allowedTypes.includes(v);
+          },
+          message: 'Unsupported file type'
+        }
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now
       }
-    },
+    }],
     timestamp: {
       type: Date,
       default: Date.now,
@@ -42,6 +86,14 @@ const groupMessageSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Ensure either text or attachments is present
+groupMessageSchema.pre('validate', function(next) {
+  if (!this.text && (!this.attachments || this.attachments.length === 0)) {
+    this.invalidate('text', 'Either text or attachments is required');
+  }
+  next();
+});
 
 groupMessageSchema.index({ group: 1, timestamp: 1 });
 groupMessageSchema.index({ from: 1 });
@@ -56,7 +108,7 @@ groupMessageSchema.methods.getPublicData = function () {
     group: this.group,
     from: this.from,
     text: this.text,
-    imageUrl: this.imageUrl || null,
+    attachments: this.attachments || [],
     timestamp: this.timestamp,
     formattedTimestamp: this.formattedTimestamp,
   };

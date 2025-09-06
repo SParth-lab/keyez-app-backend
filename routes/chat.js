@@ -45,7 +45,7 @@ const pushToFirebase = async (messageData) => {
     }
 
     const database = getDatabase();
-    const { from, to, text, timestamp, imageUrl } = messageData;
+    const { from, to, timestamp, attachments } = messageData;
     
     // Create chat path: chats/{fromId}_{toId} (sorted to ensure consistent path)
     const fromId = from.id || from.toString();
@@ -61,7 +61,7 @@ const pushToFirebase = async (messageData) => {
       to: messageData.to,
       text: messageData.text,
       timestamp: timestamp,
-      imageUrl: messageData.imageUrl,
+      attachments: attachments?.length > 0 ? attachments : [],
       formattedTimestamp: new Date(timestamp).toISOString()
     });
 
@@ -97,7 +97,7 @@ const pushGroupToFirebase = async (groupMessageData) => {
 // Send message endpoint
 router.post('/send', authenticateUser, async (req, res) => {
   try {
-    const { to, text, imageUrl } = req.body;
+    const { to, text, attachments } = req.body;
     const from = req.user._id;
 
     // Validate input
@@ -105,9 +105,10 @@ router.post('/send', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Recipient is required' });
     }
     const normalizedText = typeof text === 'string' ? text.trim() : '';
-    const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
-    if (!normalizedText && !normalizedImageUrl) {
-      return res.status(400).json({ error: 'Either text or imageUrl is required' });
+    const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
+    
+    if (!normalizedText && normalizedAttachments.length === 0) {
+      return res.status(400).json({ error: 'Either text or attachments is required' });
     }
     if (normalizedText && normalizedText.length > 1000) {
       return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
@@ -136,7 +137,7 @@ router.post('/send', authenticateUser, async (req, res) => {
       from,
       to,
       text: normalizedText || undefined,
-      imageUrl: normalizedImageUrl || undefined
+      attachments: normalizedAttachments.length > 0 ? normalizedAttachments : undefined
     });
 
     await message.save();
@@ -162,7 +163,14 @@ router.post('/send', authenticateUser, async (req, res) => {
         avatar: message.to.avatar || null
       },
       text: message.text || null,
-      imageUrl: message.imageUrl || null,
+      attachments: message.attachments ? message.attachments.map(att => ({
+        type: att.type,
+        url: att.url,
+        name: att.name,
+        size: att.size,
+        mimeType: att.mimeType,
+        uploadedAt: att.uploadedAt
+      })) : [],
       timestamp: message.timestamp.getTime()
     };
 
@@ -202,12 +210,13 @@ router.post('/send', authenticateUser, async (req, res) => {
 router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { text, imageUrl } = req.body;
+    const { text, attachments } = req.body;
 
     const normalizedText = typeof text === 'string' ? text.trim() : '';
-    const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
-    if (!normalizedText && !normalizedImageUrl) {
-      return res.status(400).json({ error: 'Either text or imageUrl is required' });
+    const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
+    
+    if (!normalizedText && normalizedAttachments.length === 0) {
+      return res.status(400).json({ error: 'Either text or attachments is required' });
     }
     if (normalizedText && normalizedText.length > 1000) {
       return res.status(400).json({ error: 'Message cannot be more than 1000 characters' });
@@ -226,7 +235,7 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
       group: groupId,
       from: req.user._id,
       text: normalizedText || undefined,
-      imageUrl: normalizedImageUrl || undefined,
+      attachments: normalizedAttachments.length > 0 ? normalizedAttachments : undefined
     });
     await message.save();
     await message.populate('from', 'username isAdmin avatar');
@@ -241,7 +250,14 @@ router.post('/groups/:groupId/send', authenticateUser, async (req, res) => {
         avatar: message.from.avatar || null,
       },
       text: message.text || null,
-      imageUrl: message.imageUrl || null,
+      attachments: message.attachments ? message.attachments.map(att => ({
+        type: att.type,
+        url: att.url,
+        name: att.name,
+        size: att.size,
+        mimeType: att.mimeType,
+        uploadedAt: att.uploadedAt
+      })) : [],
       timestamp: message.timestamp.getTime(),
     };
 
@@ -303,7 +319,7 @@ router.get('/groups/:groupId/messages', authenticateUser, async (req, res) => {
         avatar: msg.from.avatar || null,
       },
       text: msg.text,
-      imageUrl: msg.imageUrl || null,
+      attachments: msg.attachments || [],
       timestamp: msg.timestamp,
       formattedTimestamp: msg.formattedTimestamp,
     }));
@@ -358,7 +374,7 @@ router.get('/messages/:userId', authenticateUser, async (req, res) => {
         avatar: msg.to.avatar || null
       },
       text: msg.text,
-      imageUrl: msg.imageUrl || null,
+      attachments: msg.attachments || [],
       timestamp: msg.timestamp,
       formattedTimestamp: msg.formattedTimestamp
     }));
@@ -420,8 +436,8 @@ router.get('/conversations', authenticateUser, async (req, res) => {
       if (!conversations[partnerId].lastMessage || 
           msg.timestamp > conversations[partnerId].lastMessage.timestamp) {
         conversations[partnerId].lastMessage = {
-          text: msg.text || (msg.imageUrl ? '[Image]' : ''),
-          imageUrl: msg.imageUrl || null,
+          text: msg.text || (msg.attachments && msg.attachments.length > 0 ? `[${msg.attachments.length} attachment${msg.attachments.length > 1 ? 's' : ''}]` : ''),
+          attachments: msg.attachments || [],
           timestamp: msg.timestamp,
           formattedTimestamp: msg.formattedTimestamp
         };
