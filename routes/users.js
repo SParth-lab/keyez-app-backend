@@ -45,10 +45,12 @@ router.get('/', requireAdmin, async (req, res) => {
     } else {
       query.isAdmin = false
     }
-    if (status) {
-      query.isDeleted = status === "active" ? false : true
-    } else {
+    if (status === 'active') {
       query.isDeleted = false
+    } else if (status === 'deleted') {
+      query.isDeleted = true
+    } else {
+      delete query.isDeleted
     }
     if (search) {
       query.username = { $regex: search, $options: 'i' };
@@ -58,6 +60,8 @@ router.get('/', requireAdmin, async (req, res) => {
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
+
+      console.log(query)
 
     const total = await User.countDocuments(query);
 
@@ -228,50 +232,7 @@ router.get('/stats/overview', requireAdmin, async (req, res) => {
   }
 });
 
-// Bulk operations (admin only)
-router.post('/bulk', requireAdmin, async (req, res) => {
-  try {
-    const { action, userIds } = req.body;
-    
-    if (!action || !userIds || !Array.isArray(userIds)) {
-      return res.status(400).json({ error: 'Invalid request parameters' });
-    }
 
-    let result;
-    
-    switch (action) {
-      case 'delete':
-        // Prevent deleting all admins
-        const adminsToDelete = await User.countDocuments({
-          _id: { $in: userIds },
-          isAdmin: true
-        });
-        const totalAdmins = await User.countDocuments({ isAdmin: true });
-        
-        if (adminsToDelete >= totalAdmins) {
-          return res.status(400).json({ error: 'Cannot delete all admin users' });
-        }
-        
-        result = await User.deleteMany({ _id: { $in: userIds } });
-        break;
-        
-      default:
-        return res.status(400).json({ error: 'Invalid action' });
-    }
-
-    res.json({
-      message: `Bulk operation '${action}' completed successfully`,
-      modifiedCount: result.deletedCount
-    });
-
-  } catch (error) {
-    console.error('Bulk operation error:', error);
-    res.status(500).json({ error: 'Bulk operation failed' });
-  }
-});
-
-module.exports = router; 
- 
 // Restore user (admin only)
 router.post('/:id/restore', requireAdmin, async (req, res) => {
   try {
@@ -289,3 +250,108 @@ router.post('/:id/restore', requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Failed to restore user' });
   }
 });
+
+// Generate random password utility
+const generateRandomPassword = (length = 8) => {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length));
+  }
+  return password;
+};
+
+// Create user (admin only)
+router.post('/', requireAdmin, async (req, res) => {
+  try {
+    const { username, email, phoneNumber, password, isAdmin = false } = req.body;
+
+    // Validate that either username or phoneNumber is provided
+    if (!username && !phoneNumber) {
+      return res.status(400).json({ error: 'Either username or phone number is required' });
+    }
+
+    // Generate password if not provided
+    let userPassword = password;
+    let generatedPassword = null;
+    if (!userPassword) {
+      userPassword = generateRandomPassword(8);
+      generatedPassword = userPassword; // Store for response
+    }
+
+    // Validate password length
+    if (userPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Additional validation for email format if provided
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: 'Please provide a valid email address' });
+    }
+
+    // Additional validation for phone number format if provided
+    if (phoneNumber && !/^\d{10}$/.test(phoneNumber)) {
+      return res.status(400).json({ error: 'Please provide a valid 10-digit phone number' });
+    }
+
+    // Check for existing users with same username or phone number
+    if (username) {
+      const existingUserByUsername = await User.findByUsername(username);
+      if (existingUserByUsername) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+    }
+
+    if (phoneNumber) {
+      const existingUserByPhone = await User.findByPhoneNumber(phoneNumber);
+      if (existingUserByPhone) {
+        return res.status(400).json({ error: 'Phone number already exists' });
+      }
+    }
+
+    // Check for existing email if provided
+    if (email) {
+      const existingUserByEmail = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+      if (existingUserByEmail) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
+    }
+
+    // Create new user
+    const newUser = new User({
+      username: username || undefined,
+      email: email || undefined,
+      phoneNumber: phoneNumber || undefined,
+      password: userPassword,
+      isAdmin: Boolean(isAdmin)
+    });
+
+    await newUser.save();
+
+    // Prepare response
+    const responseData = {
+      message: 'User created successfully',
+      user: newUser.getPublicProfile()
+    };
+
+    // Include generated password in response if it was auto-generated
+    if (generatedPassword) {
+      responseData.generatedPassword = generatedPassword;
+    }
+
+    res.status(201).json(responseData);
+
+  } catch (error) {
+    console.error('Create user error:', error);
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue || {})[0] || 'field';
+      return res.status(400).json({ error: `${field} already exists` });
+    }
+    
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+module.exports = router;
