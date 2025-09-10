@@ -86,6 +86,23 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Check if the user is deleted
+    if (user.isDeleted) {
+      return res.status(401).json({ error: 'User is deleted' });
+    }
+
+    // Check if user already has active FCM tokens (another device logged in)
+    // Skip this check for admin users (they can have multiple devices)
+    if (!user.isAdmin && user.fcmTokens && user.fcmTokens.length > 0) {
+      const activeTokens = user.fcmTokens.filter(token => token.isActive);
+      if (activeTokens.length > 0) {
+        return res.status(409).json({ 
+          error: 'User is already logged in on another device. Please logout from the other device first.',
+          code: 'DEVICE_ALREADY_ACTIVE'
+        });
+      }
+    }
+
     // Verify password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
